@@ -67,13 +67,13 @@ const FAQ_DATA = [
 ];
 
 async function loadProducts() {
-  try { var r = await window.storage.get("ip-products"); return r ? JSON.parse(r.value) : DEFAULT_PRODUCTS; } catch(e) { return DEFAULT_PRODUCTS; }
+  try { var r = localStorage.getItem("ip-products"); return r ? JSON.parse(r) : DEFAULT_PRODUCTS; } catch(e) { return DEFAULT_PRODUCTS; }
 }
-async function saveProducts(p) { try { await window.storage.set("ip-products", JSON.stringify(p)); } catch(e) {} }
+async function saveProducts(p) { try { localStorage.setItem("ip-products", JSON.stringify(p)); } catch(e) {} }
 async function loadOrders() {
-  try { var r = await window.storage.get("ip-orders"); return r ? JSON.parse(r.value) : []; } catch(e) { return []; }
+  try { var r = localStorage.getItem("ip-orders"); return r ? JSON.parse(r) : []; } catch(e) { return []; }
 }
-async function saveOrders(o) { try { await window.storage.set("ip-orders", JSON.stringify(o)); } catch(e) {} }
+async function saveOrders(o) { try { localStorage.setItem("ip-orders", JSON.stringify(o)); } catch(e) {} }
 
 function usePayPal(clientId) {
   const [loaded, setLoaded] = useState(false);
@@ -132,9 +132,7 @@ function LogoSVG(props) {
   var sz = props.size || 52;
   const [customSrc, setCustomSrc] = useState(window.__ipLogo || null);
   useEffect(function() {
-    window.storage.get("ip-logo").then(function(r) {
-      if (r) { setCustomSrc(r.value); window.__ipLogo = r.value; }
-    }).catch(function(){});
+    try { var _cl = localStorage.getItem("ip-logo"); if(_cl){ setCustomSrc(_cl); window.__ipLogo = _cl; } } catch(e) {}
     var interval = setInterval(function() {
       var cur = window.__ipLogo || null;
       setCustomSrc(function(prev) { return prev !== cur ? cur : prev; });
@@ -735,21 +733,19 @@ function AdminView(props) {
   const [logoUrl, setLogoUrl] = useState("");
 
   useEffect(function() {
-    window.storage.get("ip-logo").then(function(r) {
-      if (r) { setLogoSrc(r.value); window.__ipLogo = r.value; }
-    }).catch(function(){});
+    try { var _l = localStorage.getItem("ip-logo"); if(_l){ setLogoSrc(_l); window.__ipLogo = _l; } } catch(e) {}
   }, []);
 
   function saveLogo(src) {
     setLogoSrc(src);
     window.__ipLogo = src;
-    window.storage.set("ip-logo", src).catch(function(){});
+    try { localStorage.setItem("ip-logo", src); } catch(e) {}
     st("Logo updated!");
   }
   function removeLogo() {
     setLogoSrc(null);
     window.__ipLogo = null;
-    window.storage.delete("ip-logo").catch(function(){});
+    try { localStorage.removeItem("ip-logo"); } catch(e) {}
     st("Logo removed");
   }
 
