@@ -13,13 +13,15 @@ const BD   = "#1e1e2e";
 const CATEGORIES = ["Props", "Effects", "Bundles", "Accessories", "Other"];
 const EMOJIS = ["🎈","🔫","🎊","🎉","💜","📦","⚡","🌀","🎯","🔥","💥","🎆","🎇","✨","🌟","💫","🎪","🎭"];
 
+const LOGO_URL = "https://i.imgur.com/KpqMNya.png";
+
 const DEFAULT_PRODUCTS = [
-  { id:1, name:"Interactive Pump",        price:89.99,  type:"physical", category:"Props",    desc:"Powerful pump system designed to keep your interactive props running smoothly all night long.", emoji:"🎈", img:null, stock:25, active:true },
-  { id:2, name:"Interactive Blaster",     price:129.99, type:"physical", category:"Props",    desc:"High-powered interactive blaster built for big impact. LED effects, long range, endless fun.", emoji:"🔫", img:null, stock:12, active:true },
-  { id:3, name:"Interactive Silly String",price:49.99,  type:"physical", category:"Props",    desc:"Interactive silly string that lights up, sprays far, and takes your event to the next level.", emoji:"🎊", img:null, stock:40, active:true },
-  { id:4, name:"LED Confetti Cannon",     price:79.99,  type:"physical", category:"Effects",  desc:"Professional confetti cannon with multi-color LED bursts. Perfect for any crowd moment.",      emoji:"🎉", img:null, stock:18, active:true },
+  { id:1, name:"Interactive Pump",        price:69.99,  type:"physical", category:"Props",    desc:"The Interactive Pump is an interactive streamer prop that lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions, it transforms your audience from passive viewers into active participants in the stream experience.", emoji:"🎈", img:"https://i.imgur.com/oblBDNn.png", stock:25, active:true },
+  { id:2, name:"Interactive Blaster",     price:89.99,  type:"physical", category:"Props",    desc:"The Interactive Blaster is a live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, webhooks, and stream events. Built for creators who want high-energy audience interaction, it adds surprise, tension, and unforgettable moments directly into your livestreams.", emoji:"🔫", img:"https://i.imgur.com/jCk2vdC.png", stock:12, active:true },
+  { id:3, name:"Interactive Silly String",price:69.99,  type:"physical", category:"Props",    desc:"The Interactive Silly String is a streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream through gifts, donations, alerts, webhooks, and custom events. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences your audience can control in real time.", emoji:"🎊", img:"https://i.imgur.com/7hYKQdV.png", stock:40, active:true },
+  { id:4, name:"Interactive LED Sign",    price:59.99,  type:"physical", category:"Effects",  desc:"The Interactive Sign is a customizable LED streamer sign designed to bring your name, brand, or stream setup to life with dynamic lighting and interactive effects. Perfect for creators, it adds a professional and eye-catching touch to any streaming space while creating a more immersive experience for viewers.", emoji:"🎉", img:"https://i.imgur.com/ia02jiA.png", stock:18, active:true },
   { id:5, name:"Neon Foam Blaster",       price:59.99,  type:"physical", category:"Props",    desc:"UV-reactive foam blaster with neon effects. Glows under blacklight for ultimate impact.",      emoji:"💜", img:null, stock:30, active:true },
-  { id:6, name:"Event Starter Pack",      price:199.99, type:"physical", category:"Bundles",  desc:"Everything you need to launch your first event. Includes Pump, Silly String and accessories.", emoji:"📦", img:null, stock:8,  active:true },
+  { id:6, name:"Caos Bundle",             price:220.00, type:"physical", category:"Bundles",  desc:"The Interactive Bundle combines the Interactive Pump, Interactive Blaster, and Interactive Silly String into the ultimate all-in-one streamer setup for maximum audience interaction. Designed for creators who want nonstop chaos, reactions, and engagement, this bundle allows viewers to trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — turning every stream into an unforgettable interactive experience.", emoji:"📦", img:null, stock:8,  active:true },
 ];
 
 const TRUST_ITEMS = [
@@ -67,7 +69,16 @@ const FAQ_DATA = [
 ];
 
 async function loadProducts() {
-  try { var r = localStorage.getItem("ip-products"); return r ? JSON.parse(r) : DEFAULT_PRODUCTS; } catch(e) { return DEFAULT_PRODUCTS; }
+  try {
+    var r = localStorage.getItem("ip-products");
+    if (!r) return DEFAULT_PRODUCTS;
+    var stored = JSON.parse(r);
+    // Merge with defaults to ensure images are always present
+    return stored.map(function(p) {
+      var def = DEFAULT_PRODUCTS.find(function(d){ return d.id === p.id; });
+      return Object.assign({}, p, { img: p.img || (def ? def.img : null) });
+    });
+  } catch(e) { return DEFAULT_PRODUCTS; }
 }
 async function saveProducts(p) { try { localStorage.setItem("ip-products", JSON.stringify(p)); } catch(e) {} }
 async function loadOrders() {
@@ -130,11 +141,15 @@ export default function App() {
 
 function LogoSVG(props) {
   var sz = props.size || 52;
-  const [customSrc, setCustomSrc] = useState(window.__ipLogo || null);
+  const [customSrc, setCustomSrc] = useState(window.__ipLogo || LOGO_URL);
   useEffect(function() {
-    try { var _cl = localStorage.getItem("ip-logo"); if(_cl){ setCustomSrc(_cl); window.__ipLogo = _cl; } } catch(e) {}
+    try {
+      var stored = localStorage.getItem("ip-logo");
+      if (stored) { setCustomSrc(stored); window.__ipLogo = stored; }
+      else { setCustomSrc(LOGO_URL); }
+    } catch(e) { setCustomSrc(LOGO_URL); }
     var interval = setInterval(function() {
-      var cur = window.__ipLogo || null;
+      var cur = window.__ipLogo || LOGO_URL;
       setCustomSrc(function(prev) { return prev !== cur ? cur : prev; });
     }, 600);
     return function() { clearInterval(interval); };
