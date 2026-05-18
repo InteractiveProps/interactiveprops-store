@@ -10,7 +10,7 @@ const BG2  = "#111118";
 const BG3  = "#1a1a2e";
 const BD   = "#1e1e2e";
 
-const CATEGORIES = ["Props", "Effects", "Bundles", "Accessories", "Other"];
+const CATEGORIES = ["Props", "Effects", "Bundles", "Games", "Accessories", "Other"];
 const EMOJIS = ["🎈","🔫","🎊","🎉","💜","📦","⚡","🌀","🎯","🔥","💥","🎆","🎇","✨","🌟","💫","🎪","🎭"];
 
 const LOGO_URL = "https://i.imgur.com/KpqMNya.png";
@@ -22,6 +22,7 @@ const DEFAULT_PRODUCTS = [
   { id:4, name:"Interactive LED Sign",    price:59.99,  type:"physical", category:"Effects",  desc:"The Interactive Sign is a customizable LED streamer sign designed to bring your name, brand, or stream setup to life with dynamic lighting and interactive effects. Perfect for creators, it adds a professional and eye-catching touch to any streaming space while creating a more immersive experience for viewers.", emoji:"🎉", img:"https://i.imgur.com/ia02jiA.png", stock:18, active:true },
   { id:5, name:"Neon Foam Blaster",       price:59.99,  type:"physical", category:"Props",    desc:"UV-reactive foam blaster with neon effects. Glows under blacklight for ultimate impact.",      emoji:"💜", img:null, stock:30, active:true },
   { id:6, name:"Caos Bundle",             price:220.00, type:"physical", category:"Bundles",  desc:"The Interactive Bundle combines the Interactive Pump, Interactive Blaster, and Interactive Silly String into the ultimate all-in-one streamer setup for maximum audience interaction. Designed for creators who want nonstop chaos, reactions, and engagement, this bundle allows viewers to trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — turning every stream into an unforgettable interactive experience.", emoji:"📦", img:null, stock:8,  active:true },
+  { id:7, name:"Interactive Stellar Dash", price:0.99,  type:"digital",  category:"Games",    desc:"Stellar Dash is a fast-paced interactive arcade space runner where players pilot a futuristic ship through dangerous cosmic lanes filled with mines, lasers, asteroids, and enemy ships. What makes the game unique is that the live chat controls the chaos — viewers can trigger obstacles, attacks, and difficulty changes in real time, turning every match into an unpredictable battle for survival. Built for streamers and audience interaction, Stellar Dash combines quick reflex gameplay with nonstop community-driven action.", emoji:"🚀", img:"https://i.imgur.com/jlRiv7Q.png", stock:99, active:true },
 ];
 
 const TRUST_ITEMS = [
