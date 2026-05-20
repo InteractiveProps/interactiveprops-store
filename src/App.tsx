@@ -1,4 +1,151 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+
+// ─── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAAhBlFhTAREyeWsQBmlVD6ktVLXOUQDKU",
+  authDomain: "interactiveprop-store.firebaseapp.com",
+  projectId: "interactiveprop-store",
+  storageBucket: "interactiveprop-store.firebasestorage.app",
+  messagingSenderId: "152459636744",
+  appId: "1:152459636744:web:9edadf7733fcf2b8c361bd"
+};
+
+// ─── FIREBASE LOADER ──────────────────────────────────────────────────────────
+var _db = null;
+var _dbReady = false;
+var _dbCallbacks = [];
+
+function getDB() {
+  return new Promise(function(resolve) {
+    if (_db) { resolve(_db); return; }
+    _dbCallbacks.push(resolve);
+  });
+}
+
+function initFirebase() {
+  if (typeof window === "undefined") return;
+  var script1 = document.createElement("script");
+  script1.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
+  script1.onload = function() {
+    var script2 = document.createElement("script");
+    script2.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
+    script2.onload = function() {
+      if (!firebase.apps.length) { firebase.initializeApp(FIREBASE_CONFIG); }
+      _db = firebase.firestore();
+      _dbCallbacks.forEach(function(cb) { cb(_db); });
+      _dbCallbacks = [];
+    };
+    document.head.appendChild(script2);
+  };
+  document.head.appendChild(script1);
+}
+
+if (typeof window !== "undefined") { initFirebase(); }
+
+// ─── FIRESTORE HELPERS ────────────────────────────────────────────────────────
+async function fsGet(collection, docId) {
+  try {
+    var db = await getDB();
+    var doc = await db.collection(collection).doc(docId).get();
+    return doc.exists ? doc.data() : null;
+  } catch(e) { console.error("fsGet error:", e); return null; }
+}
+
+async function fsSet(collection, docId, data) {
+  try {
+    var db = await getDB();
+    await db.collection(collection).doc(docId).set(data);
+    return true;
+  } catch(e) { console.error("fsSet error:", e); return false; }
+}
+
+async function fsAdd(collection, data) {
+  try {
+    var db = await getDB();
+    var ref = await db.collection(collection).add(data);
+    return ref.id;
+  } catch(e) { console.error("fsAdd error:", e); return null; }
+}
+
+async function fsGetAll(collection) {
+  try {
+    var db = await getDB();
+    var snap = await db.collection(collection).orderBy("date", "desc").get();
+    var results = [];
+    snap.forEach(function(doc) { results.push(Object.assign({ _id: doc.id }, doc.data())); });
+    return results;
+  } catch(e) { console.error("fsGetAll error:", e); return []; }
+}
+
+function fsListen(collection, callback) {
+  getDB().then(function(db) {
+    db.collection(collection).orderBy("date", "desc").onSnapshot(function(snap) {
+      var results = [];
+      snap.forEach(function(doc) { results.push(Object.assign({ _id: doc.id }, doc.data())); });
+      callback(results);
+    });
+  });
+}
+
+// ─── STORAGE HELPERS (Firestore + localStorage fallback) ──────────────────────
+async function loadProducts() {
+  try {
+    var data = await fsGet("settings", "products");
+    if (data && data.items) return data.items;
+    var r = localStorage.getItem("ip-products");
+    return r ? JSON.parse(r) : DEFAULT_PRODUCTS;
+  } catch(e) { return DEFAULT_PRODUCTS; }
+}
+
+async function saveProducts(p) {
+  try {
+    await fsSet("settings", "products", { items: p, updated: new Date().toISOString() });
+    localStorage.setItem("ip-products", JSON.stringify(p));
+  } catch(e) { localStorage.setItem("ip-products", JSON.stringify(p)); }
+}
+
+async function loadOrders() {
+  try {
+    var orders = await fsGetAll("orders");
+    return orders;
+  } catch(e) {
+    var r = localStorage.getItem("ip-orders");
+    return r ? JSON.parse(r) : [];
+  }
+}
+
+async function saveOrder(order) {
+  try {
+    await fsAdd("orders", order);
+  } catch(e) {
+    var existing = JSON.parse(localStorage.getItem("ip-orders") || "[]");
+    localStorage.setItem("ip-orders", JSON.stringify([order].concat(existing)));
+  }
+}
+
+async function loadLogo() {
+  try {
+    var data = await fsGet("settings", "logo");
+    return data && data.url ? data.url : LOGO_URL;
+  } catch(e) {
+    return localStorage.getItem("ip-logo") || LOGO_URL;
+  }
+}
+
+async function saveLogo(url) {
+  try {
+    await fsSet("settings", "logo", { url: url, updated: new Date().toISOString() });
+    localStorage.setItem("ip-logo", url);
+  } catch(e) { localStorage.setItem("ip-logo", url); }
+}
+
+async function deleteLogo() {
+  try {
+    await fsSet("settings", "logo", { url: LOGO_URL, updated: new Date().toISOString() });
+    localStorage.removeItem("ip-logo");
+  } catch(e) { localStorage.removeItem("ip-logo"); }
+}
+
 
 const OWNER_PASSWORD = "PROPS0326";
 const PAYPAL_CLIENT_ID = "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
@@ -20,7 +167,7 @@ const DEFAULT_PRODUCTS = [
   { id:2, name:"Interactive Blaster",     price:89.99,  type:"physical", category:"Props",    desc:"The Interactive Blaster is a live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, webhooks, and stream events. Built for creators who want high-energy audience interaction, it adds surprise, tension, and unforgettable moments directly into your livestreams.", emoji:"🔫", img:"https://i.imgur.com/jCk2vdC.png", stock:12, active:true },
   { id:3, name:"Interactive Silly String",price:69.99,  type:"physical", category:"Props",    desc:"The Interactive Silly String is a streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream through gifts, donations, alerts, webhooks, and custom events. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences your audience can control in real time.", emoji:"🎊", img:"https://i.imgur.com/7hYKQdV.png", stock:40, active:true },
   { id:4, name:"Interactive LED Sign",    price:59.99,  type:"physical", category:"Props",    desc:"The Interactive Sign is a customizable LED streamer sign designed to bring your name, brand, or stream setup to life with dynamic lighting and interactive effects. Perfect for creators, it adds a professional and eye-catching touch to any streaming space while creating a more immersive experience for viewers.", emoji:"🎉", img:"https://i.imgur.com/ia02jiA.png", stock:18, active:true },
-  { id:6, name:"Caos Bundle",             price:220.00, type:"physical", category:"Bundles",  desc:"The Interactive Bundle combines the Interactive Pump, Interactive Blaster, and Interactive Silly String into the ultimate all-in-one streamer setup for maximum audience interaction. Designed for creators who want nonstop chaos, reactions, and engagement, this bundle allows viewers to trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — turning every stream into an unforgettable interactive experience.", emoji:"📦", img:null, stock:8,  active:true },
+  { id:6, name:"Chaos Bundle",             price:220.00, type:"physical", category:"Bundles",  desc:"The Interactive Bundle combines the Interactive Pump, Interactive Blaster, and Interactive Silly String into the ultimate all-in-one streamer setup for maximum audience interaction. Designed for creators who want nonstop chaos, reactions, and engagement, this bundle allows viewers to trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — turning every stream into an unforgettable interactive experience.", emoji:"📦", img:null, stock:8,  active:true },
   { id:7, name:"Interactive Stellar Dash", price:0.99,  type:"digital",  category:"Games",    desc:"Stellar Dash is a fast-paced interactive arcade space runner where players pilot a futuristic ship through dangerous cosmic lanes filled with mines, lasers, asteroids, and enemy ships. What makes the game unique is that the live chat controls the chaos — viewers can trigger obstacles, attacks, and difficulty changes in real time, turning every match into an unpredictable battle for survival. Built for streamers and audience interaction, Stellar Dash combines quick reflex gameplay with nonstop community-driven action.", emoji:"🚀", img:"https://i.imgur.com/jlRiv7Q.png", stock:99, active:true },
 ];
 
@@ -68,23 +215,10 @@ const FAQ_DATA = [
   ]},
 ];
 
-async function loadProducts() {
-  try {
-    var r = localStorage.getItem("ip-products");
-    if (!r) return DEFAULT_PRODUCTS;
-    var stored = JSON.parse(r);
-    // Merge with defaults to ensure images are always present
-    return stored.map(function(p) {
-      var def = DEFAULT_PRODUCTS.find(function(d){ return d.id === p.id; });
-      return Object.assign({}, p, { img: p.img || (def ? def.img : null) });
-    });
-  } catch(e) { return DEFAULT_PRODUCTS; }
-}
-async function saveProducts(p) { try { localStorage.setItem("ip-products", JSON.stringify(p)); } catch(e) {} }
-async function loadOrders() {
-  try { var r = localStorage.getItem("ip-orders"); return r ? JSON.parse(r) : []; } catch(e) { return []; }
-}
-async function saveOrders(o) { try { localStorage.setItem("ip-orders", JSON.stringify(o)); } catch(e) {} }
+// loadProducts defined above with Firebase
+// saveProducts defined above with Firebase
+// loadOrders defined above with Firebase
+// saveOrders defined above with Firebase
 
 function usePayPal(clientId) {
   const [loaded, setLoaded] = useState(false);
@@ -111,8 +245,17 @@ export default function App() {
 
   const persistProducts = useCallback(async function(p) { setProducts(p); await saveProducts(p); }, []);
   const addOrder = useCallback(async function(order) {
-    var updated = [order].concat(orders); setOrders(updated); await saveOrders(updated);
+    await saveOrder(order);
+    var updated = [order].concat(orders);
+    setOrders(updated);
   }, [orders]);
+
+  // Listen to orders in real time from Firestore
+  useEffect(function() {
+    fsListen("orders", function(liveOrders) {
+      setOrders(liveOrders);
+    });
+  }, []);
 
   var css = [
     "@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Barlow:wght@400;500;600;700&display=swap');",
@@ -143,11 +286,10 @@ function LogoSVG(props) {
   var sz = props.size || 52;
   const [customSrc, setCustomSrc] = useState(window.__ipLogo || LOGO_URL);
   useEffect(function() {
-    try {
-      var stored = localStorage.getItem("ip-logo");
-      if (stored) { setCustomSrc(stored); window.__ipLogo = stored; }
-      else { setCustomSrc(LOGO_URL); }
-    } catch(e) { setCustomSrc(LOGO_URL); }
+    loadLogo().then(function(url) {
+      setCustomSrc(url);
+      window.__ipLogo = url;
+    });
     var interval = setInterval(function() {
       var cur = window.__ipLogo || LOGO_URL;
       setCustomSrc(function(prev) { return prev !== cur ? cur : prev; });
@@ -435,8 +577,31 @@ function CheckoutModal(props) {
     if (step !== "payment" || !paypalLoaded || paypalClientId === "YOUR_PAYPAL_CLIENT_ID") return;
     var container = document.getElementById("paypal-btn-container");
     if (!container || container.childNodes.length > 0) return;
+    var items = cart.map(function(i) {
+      return {
+        name: i.name,
+        unit_amount: { value: i.price.toFixed(2), currency_code: "USD" },
+        quantity: String(i.qty),
+        sku: String(i.id),
+        category: i.type === "digital" ? "DIGITAL_GOODS" : "PHYSICAL_GOODS"
+      };
+    });
     window.paypal.Buttons({
-      createOrder: function(data, actions) { return actions.order.create({ purchase_units:[{ amount:{ value:cartTotal.toFixed(2) } }] }); },
+      createOrder: function(data, actions) {
+        return actions.order.create({
+          purchase_units: [{
+            description: "Interactive Props Order",
+            amount: {
+              value: cartTotal.toFixed(2),
+              currency_code: "USD",
+              breakdown: {
+                item_total: { value: cartTotal.toFixed(2), currency_code: "USD" }
+              }
+            },
+            items: items
+          }]
+        });
+      },
       onApprove: async function(data, actions) { var order = await actions.order.capture(); onComplete(order, shipping); setStep("done"); },
       onError: function() { alert("Payment failed. Please try again."); },
       style: { layout:"vertical", color:"black", shape:"rect", label:"pay" },
@@ -748,19 +913,25 @@ function AdminView(props) {
   const [logoUrl, setLogoUrl] = useState("");
 
   useEffect(function() {
-    try { var _l = localStorage.getItem("ip-logo"); if(_l){ setLogoSrc(_l); window.__ipLogo = _l; } } catch(e) {}
+    loadLogo().then(function(url) {
+      setLogoSrc(url !== LOGO_URL ? url : null);
+      window.__ipLogo = url;
+    });
   }, []);
 
   function saveLogo(src) {
     setLogoSrc(src);
     window.__ipLogo = src;
-    try { localStorage.setItem("ip-logo", src); } catch(e) {}
+    saveLogo_fs(src);
     st("Logo updated!");
   }
+  function saveLogo_fs(src) {
+    saveLogo(src).catch(function(){});
+  }
   function removeLogo() {
-    setLogoSrc(null);
-    window.__ipLogo = null;
-    try { localStorage.removeItem("ip-logo"); } catch(e) {}
+    setLogoSrc(LOGO_URL);
+    window.__ipLogo = LOGO_URL;
+    deleteLogo().catch(function(){});
     st("Logo removed");
   }
 
