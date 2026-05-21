@@ -166,7 +166,7 @@ const DEFAULT_PRODUCTS = [
   { id:1, name:"Interactive Pump",        price:69.99,  type:"physical", category:"Props",    desc:"The Interactive Pump is an interactive streamer prop that lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions, it transforms your audience from passive viewers into active participants in the stream experience.", emoji:"🎈", img:"https://i.imgur.com/oblBDNn.png", stock:25, active:true },
   { id:2, name:"Interactive Blaster",     price:89.99,  type:"physical", category:"Props",    desc:"The Interactive Blaster is a live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, webhooks, and stream events. Built for creators who want high-energy audience interaction, it adds surprise, tension, and unforgettable moments directly into your livestreams.", emoji:"🔫", img:"https://i.imgur.com/jCk2vdC.png", stock:12, active:true },
   { id:3, name:"Interactive Silly String",price:69.99,  type:"physical", category:"Props",    desc:"The Interactive Silly String is a streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream through gifts, donations, alerts, webhooks, and custom events. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences your audience can control in real time.", emoji:"🎊", img:"https://i.imgur.com/7hYKQdV.png", stock:40, active:true },
-  { id:4, name:"Interactive LED Sign",    price:59.99,  type:"physical", category:"Props",    desc:"The Interactive Sign is a customizable LED streamer sign designed to bring your name, brand, or stream setup to life with dynamic lighting and interactive effects. Perfect for creators, it adds a professional and eye-catching touch to any streaming space while creating a more immersive experience for viewers.", emoji:"🎉", img:"https://i.imgur.com/ia02jiA.png", stock:18, active:true },
+  { id:4, name:"Interactive LED Sign",    price:59.99,  type:"physical", category:"Props",    desc:"The Interactive Sign is a customizable LED streamer sign designed to bring your name, brand, or stream setup to life with dynamic lighting and interactive effects. Perfect for creators, it adds a professional and eye-catching touch to any streaming space while creating a more immersive experience for viewers. The sign supports a maximum of 8 letters, with an additional cost of $3 per letter after 8. Approximate size is 18 inches wide, depending on the name length and design layout.", emoji:"🎉", img:"https://i.imgur.com/ia02jiA.png", stock:18, active:true },
   { id:6, name:"Chaos Bundle",             price:220.00, type:"physical", category:"Bundles",  desc:"The Interactive Bundle combines the Interactive Pump, Interactive Blaster, and Interactive Silly String into the ultimate all-in-one streamer setup for maximum audience interaction. Designed for creators who want nonstop chaos, reactions, and engagement, this bundle allows viewers to trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — turning every stream into an unforgettable interactive experience.", emoji:"📦", img:null, stock:8,  active:true },
   { id:7, name:"Interactive Stellar Dash", price:0.99,  type:"digital",  category:"Games",    desc:"Stellar Dash is a fast-paced interactive arcade space runner where players pilot a futuristic ship through dangerous cosmic lanes filled with mines, lasers, asteroids, and enemy ships. What makes the game unique is that the live chat controls the chaos — viewers can trigger obstacles, attacks, and difficulty changes in real time, turning every match into an unpredictable battle for survival. Built for streamers and audience interaction, Stellar Dash combines quick reflex gameplay with nonstop community-driven action.", emoji:"🚀", img:"https://i.imgur.com/jlRiv7Q.png", stock:99, active:true },
 ];
@@ -376,8 +376,47 @@ function ShopView(props) {
     showToast(product.name + " added!");
   }
   function showToast(msg) { setToast(msg); setTimeout(function(){ setToast(null); }, 2200); }
-  function handleOrderComplete(orderData, shipping) {
-    addOrder({ id:"ORD-"+Date.now(), date:new Date().toISOString(), items:cart, total:cartTotal, shipping:shipping, paypal:orderData, status:"paid" });
+  function handleOrderComplete(orderData, shipping, signText, finalTotal) {
+    var extraLetters = signText ? Math.max(0, signText.replace(/ /g,"").length - 8) : 0;
+    var extraCost = extraLetters * 3;
+    var orderTotal = finalTotal !== undefined ? finalTotal : cartTotal;
+    var orderId = "ORD-" + Date.now();
+    var orderDate = new Date().toISOString();
+
+    // Save to Firebase
+    addOrder({ id:orderId, date:orderDate, items:cart, total:orderTotal, shipping:shipping, signText: signText || null, signExtraCost: extraCost > 0 ? extraCost : null, paypal:orderData, status:"paid" });
+
+    // Fire webhook to Make.com
+    fetch("https://hook.us2.make.com/mbkm6kji0gsdnebf7wnoa9wojox2yo9h", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: "order.completed",
+        order_id: orderId,
+        date: orderDate,
+        customer: {
+          name: shipping.name,
+          email: shipping.email,
+          phone: shipping.phone || ""
+        },
+        shipping: {
+          address: shipping.address || "",
+          city: shipping.city || "",
+          state: shipping.state || "",
+          zip: shipping.zip || "",
+          country: shipping.country || "US"
+        },
+        items: cart.map(function(i) {
+          return { id: i.id, name: i.name, price: i.price, quantity: i.qty, type: i.type };
+        }),
+        sign_text: signText || null,
+        sign_extra_cost: extraCost > 0 ? extraCost : null,
+        subtotal: cartTotal,
+        total: orderTotal,
+        payment_method: "PayPal"
+      })
+    }).catch(function(e) { console.log("Webhook error:", e); });
+
     setCart([]); setCheckoutOpen(false); showToast("Order complete! Thank you.");
   }
 
@@ -556,7 +595,15 @@ function CheckoutModal(props) {
   const [step, setStep] = useState("shipping");
   const [shipping, setShipping] = useState({ name:"", email:"", phone:"", address:"", city:"", state:"", zip:"", country:"US" });
   const [errors, setErrors] = useState({});
+  const [signText, setSignText] = useState("");
   var hasPhysical = cart.some(function(i){ return i.type === "physical"; });
+  var hasLEDSign = cart.some(function(i){ return i.name === "Interactive LED Sign"; });
+
+  // Calculate extra letter cost dynamically
+  var extraLetters = hasLEDSign && signText ? Math.max(0, signText.replace(/ /g,"").length - 8) : 0;
+  var extraCost = extraLetters * 3;
+  var finalTotal = cartTotal + extraCost;
+
   var bigBtn = { width:"100%", background:"linear-gradient(135deg,"+PRP2+","+PRP+")", color:"#fff", border:"none", borderRadius:6, padding:"13px 20px", cursor:"pointer", fontWeight:700, fontSize:13, letterSpacing:2 };
   var inp = { padding:"10px 14px", borderRadius:6, border:"1px solid "+BD, fontSize:13, outline:"none", width:"100%", background:BG3, color:"#fff", fontFamily:"'Barlow',sans-serif" };
 
@@ -569,6 +616,7 @@ function CheckoutModal(props) {
       if (!shipping.city.trim()) e.city = "Required";
       if (!shipping.zip.trim()) e.zip = "Required";
     }
+    if (hasLEDSign && !signText.trim()) e.signText = "Please enter the text for your LED Sign";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -586,23 +634,32 @@ function CheckoutModal(props) {
         category: i.type === "digital" ? "DIGITAL_GOODS" : "PHYSICAL_GOODS"
       };
     });
+    // Add extra letter cost as a line item if applicable
+    if (extraCost > 0) {
+      items.push({
+        name: "Interactive LED Sign - Extra Letters (" + extraLetters + " x $3.00)",
+        unit_amount: { value: extraCost.toFixed(2), currency_code: "USD" },
+        quantity: "1",
+        category: "PHYSICAL_GOODS"
+      });
+    }
     window.paypal.Buttons({
       createOrder: function(data, actions) {
         return actions.order.create({
           purchase_units: [{
             description: "Interactive Props Order",
             amount: {
-              value: cartTotal.toFixed(2),
+              value: finalTotal.toFixed(2),
               currency_code: "USD",
               breakdown: {
-                item_total: { value: cartTotal.toFixed(2), currency_code: "USD" }
+                item_total: { value: finalTotal.toFixed(2), currency_code: "USD" }
               }
             },
             items: items
           }]
         });
       },
-      onApprove: async function(data, actions) { var order = await actions.order.capture(); onComplete(order, shipping); setStep("done"); },
+      onApprove: async function(data, actions) { var order = await actions.order.capture(); onComplete(order, shipping, signText, finalTotal); setStep("done"); },
       onError: function() { alert("Payment failed. Please try again."); },
       style: { layout:"vertical", color:"black", shape:"rect", label:"pay" },
     }).render("#paypal-btn-container");
@@ -620,8 +677,15 @@ function CheckoutModal(props) {
           {cart.map(function(i) {
             return <div key={i.id} style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"3px 0", color:"#888" }}><span>{i.emoji} {i.name} x{i.qty}</span><span style={{ color:PRP, fontWeight:700 }}>${(i.price*i.qty).toFixed(2)}</span></div>;
           })}
+          {extraCost > 0 && (
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"3px 0", color:"#aaa" }}>
+              <span>✨ LED Sign extra letters ({extraLetters} x $3.00)</span>
+              <span style={{ color:PRP, fontWeight:700 }}>+${extraCost.toFixed(2)}</span>
+            </div>
+          )}
           <div style={{ display:"flex", justifyContent:"space-between", fontWeight:700, borderTop:"1px solid "+BD, paddingTop:10, marginTop:6 }}>
-            <span style={{ color:"#fff" }}>Total</span><span style={{ color:PRP, fontSize:18 }}>${cartTotal.toFixed(2)}</span>
+            <span style={{ color:"#fff" }}>Total</span>
+            <span style={{ color:PRP, fontSize:18 }}>${finalTotal.toFixed(2)}</span>
           </div>
         </div>
 
@@ -663,6 +727,50 @@ function CheckoutModal(props) {
                 </label>
               </span>
             )}
+            {hasLEDSign && (
+              <div style={{ background:"linear-gradient(135deg,rgba(124,58,237,0.15),rgba(168,85,247,0.1))", border:"1px solid "+PRP2, borderRadius:12, padding:"18px 20px" }}>
+                <div style={{ fontSize:11, letterSpacing:3, color:PRP, fontWeight:700, marginBottom:10 }}>✨ CUSTOMIZE YOUR LED SIGN</div>
+                <div style={{ fontSize:13, color:"#aaa", marginBottom:10 }}>What name or text would you like on your sign? (max 20 characters)</div>
+                <input
+                  style={Object.assign({}, inp, errors.signText ? { border:"1px solid #f43f5e" } : { border:"1px solid "+PRP2 }, { letterSpacing:2, fontWeight:700, fontSize:15, textAlign:"center" })}
+                  value={signText}
+                  maxLength={20}
+                  onChange={function(e){ setSignText(e.target.value.toUpperCase()); }}
+                  placeholder="MAX GAMER"
+                />
+                <div style={{ display:"flex", justifyContent:"space-between", marginTop:6 }}>
+                  {errors.signText && <span style={{ color:"#f43f5e", fontSize:11 }}>{errors.signText}</span>}
+                  <span style={{ color:"#555", fontSize:11, marginLeft:"auto" }}>{signText.length}/20</span>
+                </div>
+                {signText.replace(/ /g,"").length > 8 && (
+                  <div style={{ marginTop:10, background:"rgba(168,85,247,0.1)", border:"1px solid "+PRP, borderRadius:8, padding:"10px 14px" }}>
+                    <div style={{ fontSize:12, color:"#aaa", marginBottom:4 }}>EXTRA LETTER COST</div>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:13, color:"#ccc" }}>
+                        {signText.replace(/ /g,"").length - 8} extra {signText.replace(/ /g,"").length - 8 === 1 ? "letter" : "letters"} x $3.00
+                      </span>
+                      <span style={{ fontSize:16, fontWeight:800, color:PRP }}>
+                        +${((signText.replace(/ /g,"").length - 8) * 3).toFixed(2)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize:11, color:"#4ade80", marginTop:6 }}>
+                      ✓ Included in your total — charged together with PayPal
+                    </div>
+                  </div>
+                )}
+                {signText.replace(/ /g,"").length > 0 && signText.replace(/ /g,"").length <= 8 && (
+                  <div style={{ marginTop:8, fontSize:12, color:"#4ade80" }}>
+                    ✓ Within the 8-letter base price — no extra charge!
+                  </div>
+                )}
+                {signText && (
+                  <div style={{ marginTop:12, textAlign:"center", background:BG3, borderRadius:8, padding:"10px", border:"1px solid "+BD }}>
+                    <div style={{ fontSize:11, color:"#666", marginBottom:4 }}>PREVIEW</div>
+                    <div style={{ fontSize:20, fontWeight:900, letterSpacing:4, background:"linear-gradient(90deg,#ff0000,#ff8800,#ffff00,#00ff00,#0088ff,#8800ff)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>{signText}</div>
+                  </div>
+                )}
+              </div>
+            )}
             <button style={bigBtn} onClick={function(){ if(validate()) setStep("payment"); }}>CONTINUE TO PAYMENT</button>
           </div>
         )}
@@ -670,12 +778,18 @@ function CheckoutModal(props) {
         {step === "payment" && (
           <div style={{ padding:"20px 24px 28px" }}>
             <div style={{ marginBottom:16, fontSize:13, color:"#666" }}>Paying as <span style={{ color:PRP }}>{shipping.email}</span></div>
+            {hasLEDSign && signText && (
+              <div style={{ marginBottom:16, background:BG3, border:"1px solid "+PRP2, borderRadius:8, padding:"10px 14px", fontSize:13 }}>
+                <span style={{ color:"#aaa" }}>LED Sign text: </span>
+                <span style={{ color:PRP, fontWeight:700, letterSpacing:2 }}>{signText}</span>
+              </div>
+            )}
             {paypalClientId === "YOUR_PAYPAL_CLIENT_ID"
               ? <div style={{ background:BG3, border:"1px solid "+BD, borderRadius:12, padding:"28px 24px", textAlign:"center" }}>
                   <div style={{ fontSize:40, marginBottom:12 }}>🔑</div>
                   <div style={{ fontWeight:700, color:"#fff", marginBottom:10 }}>PayPal Not Configured</div>
                   <div style={{ fontSize:13, color:"#666", lineHeight:1.8 }}>1. Create a PayPal Business account<br />2. Go to developer.paypal.com<br />3. Replace YOUR_PAYPAL_CLIENT_ID at the top of the file</div>
-                  <button style={Object.assign({}, bigBtn, {marginTop:20})} onClick={function(){ onComplete({demo:true}, shipping); setStep("done"); }}>SIMULATE ORDER (DEMO)</button>
+                  <button style={Object.assign({}, bigBtn, {marginTop:20})} onClick={function(){ onComplete({demo:true}, shipping, signText, finalTotal); setStep("done"); }}>SIMULATE ORDER (DEMO)</button>
                 </div>
               : <div id="paypal-btn-container" />
             }
@@ -687,7 +801,13 @@ function CheckoutModal(props) {
           <div style={{ padding:"48px 32px", textAlign:"center" }}>
             <div style={{ fontSize:64, marginBottom:16 }}>🎉</div>
             <h2 style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:34, color:"#fff", letterSpacing:3, marginBottom:10 }}>THANK YOU!</h2>
-            <p style={{ color:"#666", fontSize:14, lineHeight:1.8, marginBottom:32 }}>Confirmation sent to <span style={{ color:PRP }}>{shipping.email}</span>.</p>
+            <p style={{ color:"#666", fontSize:14, lineHeight:1.8, marginBottom:16 }}>Confirmation sent to <span style={{ color:PRP }}>{shipping.email}</span>.</p>
+            {hasLEDSign && signText && (
+              <div style={{ background:BG3, border:"1px solid "+PRP2, borderRadius:10, padding:"14px 20px", marginBottom:24, display:"inline-block" }}>
+                <div style={{ fontSize:11, color:"#aaa", marginBottom:4 }}>YOUR LED SIGN WILL SAY</div>
+                <div style={{ fontSize:22, fontWeight:900, letterSpacing:4, color:PRP }}>{signText}</div>
+              </div>
+            )}
             <button style={bigBtn} onClick={onClose}>KEEP SHOPPING</button>
           </div>
         )}
@@ -1060,6 +1180,13 @@ function AdminView(props) {
                         {o.shipping.name} - {o.shipping.email}
                         {o.shipping.address && " - " + o.shipping.address + ", " + o.shipping.city + " " + o.shipping.zip}
                       </div>
+                      {o.signText && (
+                        <div style={{ marginTop:8, background:"rgba(124,58,237,0.1)", border:"1px solid "+PRP2, borderRadius:8, padding:"8px 14px", display:"inline-flex", alignItems:"center", gap:8 }}>
+                          <span style={{ fontSize:12, color:"#aaa" }}>LED Sign text:</span>
+                          <span style={{ fontSize:14, fontWeight:900, color:PRP, letterSpacing:3 }}>{o.signText}</span>
+                          {o.signExtraCost > 0 && <span style={{ fontSize:12, color:"#f43f5e", fontWeight:700, marginLeft:8 }}>+${o.signExtraCost.toFixed(2)} extra letters</span>}
+                        </div>
+                      )}
                       <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
                         {o.items.map(function(i){ return <span key={i.id} style={{ background:BG3, border:"1px solid "+BD, borderRadius:20, padding:"3px 12px", fontSize:12, color:"#aaa" }}>{i.emoji} {i.name} x{i.qty}</span>; })}
                       </div>
