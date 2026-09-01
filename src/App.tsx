@@ -56,7 +56,11 @@ async function deleteLogo() { try { await fsSet("settings","logo",{url:LOGO_URL,
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 // Admin credentials are NOT stored in this codebase. Sign-in is handled by
 // Firebase Authentication (the user lives in the Firebase console).
-const PAYPAL_CLIENT_ID = "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
+// El client-id de PayPal es PUBLICO por diseño (viaja en el navegador). Se puede
+// sobreescribir con VITE_PAYPAL_CLIENT_ID en Vercel para probar en sandbox sin
+// tocar el codigo. El SECRETO nunca vive aqui: solo en api/comprar.js.
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID
+  || "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
 const LOGO_URL = "https://i.postimg.cc/1X5hxnT4/Untitled-design-(36).png";
 const CATEGORIES = ["Props","Effects","Bundles","Games","Accessories","Other"];
 const EMOJIS = ["🎈","🔫","🎊","🎉","💜","📦","⚡","🌀","🎯","🔥","💥","🎆","🎇","✨","🌟","💫","🎪","🎭"];
@@ -759,6 +763,21 @@ const LT:Record<string,any> = {
     footProducts:"Products",footCompany:"Company",footSupport:"Support",
     footAbout:"About us",footHow:"How it works",footPlatforms:"Platforms",footFaq:"FAQ",
     footShip:"Shipping & Delivery",footRet:"Returns & Refunds",footWar:"Warranty Policy",footContact:"Contact",
+    juego:{
+      eyebrow:"INTERACTIVE GAMES",
+      desc:"A fast-paced donut-hopping run. Buy once, play forever — on any device, from your own private link.",
+      bullets:["One-time payment, no subscription","Plays in your browser — nothing to install","Works on desktop and mobile","Your link never expires"],
+      pagoUnico:"one-time payment",
+      cargando:"Loading payment options…",
+      procesando:"Confirming your payment…",
+      acceso:"After paying you get a private link. That link is your key — keep it.",
+      errorRed:"We couldn't reach the server. If you were charged, email us and we'll send your link.",
+      errorPago:"The payment failed. Please try again.",
+      listoTitulo:"You're in!",
+      listoSub:"This is your private link. We also sent it to your PayPal email.",
+      jugar:"Play now",
+      guarda:"Save this link — it works forever, on any device.",
+    },
   },
   es:{
     navProducts:"Productos",navHow:"Cómo funciona",navPlatforms:"Plataformas",navFaq:"Preguntas",navContact:"Contacto",
@@ -825,6 +844,21 @@ const LT:Record<string,any> = {
     footProducts:"Productos",footCompany:"Empresa",footSupport:"Soporte",
     footAbout:"Nosotros",footHow:"Cómo funciona",footPlatforms:"Plataformas",footFaq:"Preguntas",
     footShip:"Envíos y Entregas",footRet:"Devoluciones y Reembolsos",footWar:"Garantía",footContact:"Contacto",
+    juego:{
+      eyebrow:"JUEGOS INTERACTIVOS",
+      desc:"Un runner trepidante saltando de dona en dona. Lo compras una vez y lo juegas para siempre — en cualquier dispositivo, desde tu enlace privado.",
+      bullets:["Pago único, sin suscripción","Se juega en el navegador — no hay que instalar nada","Funciona en computadora y en móvil","Tu enlace no caduca nunca"],
+      pagoUnico:"pago único",
+      cargando:"Cargando opciones de pago…",
+      procesando:"Confirmando tu pago…",
+      acceso:"Al pagar recibes un enlace privado. Ese enlace es tu llave — guárdalo.",
+      errorRed:"No pudimos contactar al servidor. Si se te cobró, escríbenos y te mandamos tu enlace.",
+      errorPago:"El pago falló. Inténtalo de nuevo.",
+      listoTitulo:"¡Listo!",
+      listoSub:"Este es tu enlace privado. También lo enviamos al correo de tu PayPal.",
+      jugar:"Jugar ahora",
+      guarda:"Guarda este enlace — sirve siempre y desde cualquier dispositivo.",
+    },
   },
 };
 
@@ -1217,6 +1251,91 @@ function FaqPage({products,lang,setLang,cartCount,setCartOpen,goHome,goProducts,
   );
 }
 
+// ─── COMPRA DEL JUEGO (Donut Bridge) ──────────────────────────────────────────
+// Ruta /comprar-donut-bridge. Aqui aterriza quien intenta abrir /juego sin
+// licencia. El pago NO crea la licencia desde el navegador: solo manda el id de
+// la orden a /api/comprar, que lo verifica contra PayPal con el secreto del
+// servidor. Ese enlace es la llave del comprador, para siempre.
+const JUEGO_PRECIO = "9.99";
+
+function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHome,goProducts,goFaq,goPolicy}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [enlace,setEnlace] = useState<string|null>(null);
+  const [error,setError] = useState<string|null>(null);
+  const [procesando,setProcesando] = useState(false);
+  const L = LT[lang] || LT.en;
+  const G = L.juego;
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    if(!paypalLoaded || enlace) return;
+    const cont=document.getElementById("paypal-juego-container");
+    if(!cont || cont.childNodes.length>0) return;
+    (window as any).paypal.Buttons({
+      createOrder:(_d:any,actions:any)=>actions.order.create({
+        purchase_units:[{description:"Donut Bridge",amount:{value:JUEGO_PRECIO,currency_code:"USD"}}]
+      }),
+      onApprove:async(data:any)=>{
+        setProcesando(true); setError(null);
+        try{
+          const r=await fetch("/api/comprar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idOrden:data.orderID})});
+          const j=await r.json();
+          if(j.error) setError(j.error); else setEnlace(j.enlace);
+        }catch(e){ setError(G.errorRed); }
+        finally{ setProcesando(false); }
+      },
+      onError:()=>setError(G.errorPago),
+      style:{layout:"vertical",color:"black",shape:"rect",label:"pay"}
+    }).render("#paypal-juego-container");
+  },[paypalLoaded,enlace]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
+
+      <section className="juego-page">
+        <div className="wrap juego-grid">
+          <div className="juego-media">
+            <img src="/landing/juego-cover.webp" alt="Donut Bridge" />
+          </div>
+          <div className="juego-info">
+            <p className="page-eyebrow">{G.eyebrow}</p>
+            <h1 className="juego-title">Donut <span className="grad-word">Bridge</span></h1>
+            <p className="juego-desc">{G.desc}</p>
+            <ul className="juego-list">
+              {G.bullets.map((b:string,i:number)=><li key={i}>{b}</li>)}
+            </ul>
+
+            {enlace ? (
+              <div className="juego-ok">
+                <div className="juego-ok-badge">✅</div>
+                <h3>{G.listoTitulo}</h3>
+                <p>{G.listoSub}</p>
+                <a className="juego-enlace" href={enlace}>{enlace}</a>
+                <a className="btn btn-solid juego-jugar" href={enlace}>{G.jugar} <span className="arw">→</span></a>
+                <p className="juego-fine">{G.guarda}</p>
+              </div>
+            ) : (
+              <div className="juego-compra">
+                <div className="juego-precio"><span>${JUEGO_PRECIO}</span><small>{G.pagoUnico}</small></div>
+                {procesando && <p className="juego-fine">{G.procesando}</p>}
+                {error && <p className="juego-error">{error}</p>}
+                <div id="paypal-juego-container"/>
+                {!paypalLoaded && <p className="juego-fine">{G.cargando}</p>}
+                <p className="juego-fine">{G.acceso}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [view,setView]=useState("shop");
@@ -1237,6 +1356,8 @@ export default function App() {
   useEffect(()=>{
     const path=window.location.pathname.replace(/\/+$/,"").toLowerCase();
     if(path==="/admin"||window.location.hash.toLowerCase()==="#admin") setView("login");
+    // api/juego.js manda aqui a quien intenta abrir el juego sin licencia
+    else if(path==="/comprar-donut-bridge") setView("juego");
   },[]);
   // Session comes from Firebase Auth, so a refresh keeps the owner signed in.
   useEffect(()=>{ onAdminAuth((u:any)=>setIsOwner(!!u)); },[]);
@@ -1267,7 +1388,7 @@ export default function App() {
   const goPolicy=(type:string)=>{ setView(type); window.scrollTo(0,0); };
 
   const activeProducts=products.filter((p:any)=>p.active);
-  const legacyChrome=!["shop","products","faq"].includes(view);
+  const legacyChrome=!["shop","products","faq","juego"].includes(view);
 
   return (
     <div style={{minHeight:"100vh",width:"100%",background:BG,color:T1,fontFamily:"'Rajdhani',sans-serif"}}>
@@ -1278,6 +1399,7 @@ export default function App() {
           {view==="shop"    &&<LandingView products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
           {view==="products"&&<ProductsPage products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} tab={productsTab} setTab={setProductsTab} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
           {view==="faq"     &&<FaqPage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="juego"   &&<GamePage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} paypalLoaded={paypalLoaded} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
           {view==="about"   &&<AboutView setView={setView} t={t}/>}
           {view==="contact" &&<ContactView setView={setView} t={t}/>}
           {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
