@@ -765,6 +765,7 @@ const LT:Record<string,any> = {
     footShip:"Shipping & Delivery",footRet:"Returns & Refunds",footWar:"Warranty Policy",footContact:"Contact",
     juego:{
       eyebrow:"INTERACTIVE GAMES",
+      badge:"Digital game",verJuego:"View game",
       desc:"A fast-paced donut-hopping run. Buy once, play forever — on any device, from your own private link.",
       bullets:["One-time payment, no subscription","Plays in your browser — nothing to install","Works on desktop and mobile","Your link never expires"],
       pagoUnico:"one-time payment",
@@ -846,6 +847,7 @@ const LT:Record<string,any> = {
     footShip:"Envíos y Entregas",footRet:"Devoluciones y Reembolsos",footWar:"Garantía",footContact:"Contacto",
     juego:{
       eyebrow:"JUEGOS INTERACTIVOS",
+      badge:"Juego digital",verJuego:"Ver juego",
       desc:"Un runner trepidante saltando de dona en dona. Lo compras una vez y lo juegas para siempre — en cualquier dispositivo, desde tu enlace privado.",
       bullets:["Pago único, sin suscripción","Se juega en el navegador — no hay que instalar nada","Funciona en computadora y en móvil","Tu enlace no caduca nunca"],
       pagoUnico:"pago único",
@@ -1157,7 +1159,7 @@ function LandingView({products,lang,setLang,addToCart,cartCount,setCartOpen,goPr
 }
 
 // ─── PRODUCTS PAGE (neon, Props / Games tabs) ─────────────────────────────────
-function ProductsPage({products,lang,setLang,addToCart,cartCount,setCartOpen,tab,setTab,goHome,goProducts,goFaq,goPolicy}:any) {
+function ProductsPage({products,lang,setLang,addToCart,cartCount,setCartOpen,tab,setTab,goHome,goProducts,goFaq,goPolicy,goJuego}:any) {
   const rootRef = useRef<HTMLDivElement>(null);
   const L = LT[lang] || LT.en;
   const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
@@ -1194,10 +1196,22 @@ function ProductsPage({products,lang,setLang,addToCart,cartCount,setCartOpen,tab
                  <ProductCard key={p.id} p={p} i={i} lang={lang} addToCart={addToCart} L={L}/>
                ))}
              </div>
-            :<div className="empty-cat reveal">
-               <div className="empty-badge">⚡</div>
-               <h3>{L.gamesSoonTitle}</h3>
-               <p>{L.gamesSoonBody} <a href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a>.</p>
+            :<div className="grid">
+               <article className="card juego-card reveal" data-accent="pink" onClick={goJuego}
+                 role="link" tabIndex={0} onKeyDown={(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); goJuego(); } }}>
+                 <div className="card-media juego-card-media">
+                   <span className="card-price">${JUEGO_PRECIO}</span>
+                   <span className="card-badge">{L.juego.badge}</span>
+                   <img src="/landing/juego-cover.webp" alt="Donut Bridge" loading="lazy"/>
+                 </div>
+                 <div className="card-body">
+                   <h3 className="card-title">Donut Bridge</h3>
+                   <p className="card-desc">{L.juego.desc}</p>
+                   <div className="card-foot">
+                     <span className="btn-add">{L.juego.verJuego} <span className="arw">→</span></span>
+                   </div>
+                 </div>
+               </article>
              </div>
           }
         </div>
@@ -1385,6 +1399,7 @@ export default function App() {
   const goHome=()=>{ setView("shop"); window.scrollTo(0,0); };
   const goProducts=(tab:"props"|"games")=>{ setProductsTab(tab); setView("products"); window.scrollTo(0,0); };
   const goFaq=()=>{ setView("faq"); window.scrollTo(0,0); };
+  const goJuego=()=>{ setView("juego"); window.scrollTo(0,0); };
   const goPolicy=(type:string)=>{ setView(type); window.scrollTo(0,0); };
 
   const activeProducts=products.filter((p:any)=>p.active);
@@ -1397,7 +1412,7 @@ export default function App() {
       {legacyChrome&&<Header view={view} setView={setView} isOwner={isOwner} setIsOwner={setIsOwner} lang={lang} setLang={setLang} t={t}/>}
       <div key={view}>
           {view==="shop"    &&<LandingView products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
-          {view==="products"&&<ProductsPage products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} tab={productsTab} setTab={setProductsTab} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="products"&&<ProductsPage products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} tab={productsTab} setTab={setProductsTab} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy} goJuego={goJuego}/>}
           {view==="faq"     &&<FaqPage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
           {view==="juego"   &&<GamePage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} paypalLoaded={paypalLoaded} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
           {view==="about"   &&<AboutView setView={setView} t={t}/>}

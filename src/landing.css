@@ -521,3 +521,20 @@ html.lenis, html.lenis body{ height:auto; }
 @media (max-width: 920px){
   .ip-landing .juego-grid{ grid-template-columns:1fr; }
 }
+
+/* tarjeta del juego dentro del tab Games */
+.ip-landing .juego-card{ cursor:pointer; }
+.ip-landing .juego-card:focus-visible{ outline:2px solid var(--cyan); outline-offset:3px; }
+.ip-landing .juego-card .juego-card-media{ background:linear-gradient(180deg,#160e2c,#0a0714); }
+.ip-landing .juego-card .juego-card-media img{
+  width:100%; height:100%; object-fit:cover; max-height:none;
+  filter:none; transition:transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.ip-landing .juego-card:hover .juego-card-media img{ transform:scale(1.05); }
+.ip-landing .juego-card .btn-add{ display:inline-flex; align-items:center; gap:.5em; }
+/* el badge va sobre arte claro: necesita fondo propio */
+.ip-landing .juego-card .card-badge{
+  background:rgba(10,7,20,.82); color:var(--cyan);
+  border:1px solid rgba(43,212,255,.5); backdrop-filter:blur(6px);
+  box-shadow:0 4px 14px rgba(0,0,0,.45);
+}
