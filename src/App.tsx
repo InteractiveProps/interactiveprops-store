@@ -45,7 +45,19 @@ async function fsSet(col: string, id: string, data: any) { try { const db=await 
 async function fsAdd(col: string, data: any) { try { const db=await getDB(),r=await db.collection(col).add(data); return r.id; } catch(e){return null;} }
 async function fsGetAll(col: string) { try { const db=await getDB(),s=await db.collection(col).orderBy("date","desc").get(); const r:any[]=[]; s.forEach((d:any)=>r.push({_id:d.id,...d.data()})); return r; } catch(e){return[];} }
 function fsListen(col: string, cb: (d:any[])=>void) { getDB().then(db=>{ db.collection(col).orderBy("date","desc").onSnapshot((s:any)=>{ const r:any[]=[]; s.forEach((d:any)=>r.push({_id:d.id,...d.data()})); cb(r); }); }); }
-async function loadProducts() { try { const d=await fsGet("settings","products"); if(d?.items) return d.items; const r=localStorage.getItem("ip-products"); return r?JSON.parse(r):DEFAULT_PRODUCTS; } catch(e){return DEFAULT_PRODUCTS;} }
+// Fotos nuevas de producto (2026). Firestore todavia guarda las URLs viejas de
+// imgur; este mapa las cambia por los archivos locales al cargar. Solo pisa esas
+// URLs exactas: en cuanto cambies una imagen desde el panel de admin, el valor
+// nuevo ya no coincide con ninguna clave y el mapa se aparta solo.
+const IMG_NUEVAS: Record<string,string> = {
+  "https://i.imgur.com/oblBDNn.png": "/productos/pump.webp",
+  "https://i.imgur.com/jCk2vdC.png": "/productos/blaster.webp",
+  "https://i.imgur.com/7hYKQdV.png": "/productos/silly-string.webp",
+};
+function conFotosNuevas(items:any[]) {
+  return items.map((p:any)=> (p && IMG_NUEVAS[p.img]) ? {...p, img:IMG_NUEVAS[p.img]} : p);
+}
+async function loadProducts() { try { const d=await fsGet("settings","products"); if(d?.items) return conFotosNuevas(d.items); const r=localStorage.getItem("ip-products"); return r?conFotosNuevas(JSON.parse(r)):DEFAULT_PRODUCTS; } catch(e){return DEFAULT_PRODUCTS;} }
 async function saveProducts(p:any[]) { try { await fsSet("settings","products",{items:p,updated:new Date().toISOString()}); localStorage.setItem("ip-products",JSON.stringify(p)); } catch(e){localStorage.setItem("ip-products",JSON.stringify(p));} }
 async function loadOrders() { try { return await fsGetAll("orders"); } catch(e){ const r=localStorage.getItem("ip-orders"); return r?JSON.parse(r):[]; } }
 async function saveOrder(o:any) { try { await fsAdd("orders",o); } catch(e){ const ex=JSON.parse(localStorage.getItem("ip-orders")||"[]"); localStorage.setItem("ip-orders",JSON.stringify([o,...ex])); } }
@@ -84,9 +96,9 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 const SPRING = { type:"spring", stiffness:380, damping:28 } as const;
 
 const DEFAULT_PRODUCTS = [
-  {id:1,name:"Interactive Pump",price:69.99,type:"physical",category:"Props",desc:"The Interactive Pump lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions that transform passive viewers into active participants.",emoji:"🎈",img:"https://i.imgur.com/oblBDNn.png",stock:25,active:true},
-  {id:2,name:"Interactive Blaster",price:89.99,type:"physical",category:"Props",desc:"A live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, and webhooks. Built for creators who want high-energy audience interaction with surprise, tension, and unforgettable moments.",emoji:"🔫",img:"https://i.imgur.com/jCk2vdC.png",stock:12,active:true},
-  {id:3,name:"Interactive Silly String",price:69.99,type:"physical",category:"Props",desc:"A streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences.",emoji:"🎊",img:"https://i.imgur.com/7hYKQdV.png",stock:40,active:true},
+  {id:1,name:"Interactive Pump",price:69.99,type:"physical",category:"Props",desc:"The Interactive Pump lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions that transform passive viewers into active participants.",emoji:"🎈",img:"/productos/pump.webp",stock:25,active:true},
+  {id:2,name:"Interactive Blaster",price:89.99,type:"physical",category:"Props",desc:"A live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, and webhooks. Built for creators who want high-energy audience interaction with surprise, tension, and unforgettable moments.",emoji:"🔫",img:"/productos/blaster.webp",stock:12,active:true},
+  {id:3,name:"Interactive Silly String",price:69.99,type:"physical",category:"Props",desc:"A streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences.",emoji:"🎊",img:"/productos/silly-string.webp",stock:40,active:true},
   {id:4,name:"Interactive LED Sign",price:59.99,type:"physical",category:"Props",desc:"A customizable LED streamer sign that brings your name or brand to life with dynamic lighting and interactive effects. Supports up to 8 letters at base price, with $3 per additional letter. Approx. 18 inches wide depending on name length.",emoji:"🎉",img:"https://i.imgur.com/ia02jiA.png",stock:18,active:true},
   {id:6,name:"Chaos Bundle",price:220.00,type:"physical",category:"Bundles",desc:"The ultimate all-in-one interactive setup combining the Pump, Blaster, and Silly String. Viewers trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — nonstop chaos guaranteed.",emoji:"📦",img:null,stock:8,active:true},
   {id:7,name:"Interactive Stellar Dash",price:0.99,type:"digital",category:"Games",desc:"A fast-paced arcade space runner where live chat controls the chaos. Viewers trigger obstacles, attacks, and difficulty changes in real time — turning every match into an unpredictable battle for survival built for streamers.",emoji:"🚀",img:"https://i.imgur.com/jlRiv7Q.png",stock:99,active:true},
