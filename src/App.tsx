@@ -13,15 +13,33 @@ const FIREBASE_CONFIG = {
   appId: "1:152459636744:web:9edadf7733fcf2b8c361bd"
 };
 var _db: any = null, _dbCbs: any[] = [];
+var _auth: any = null, _authCbs: any[] = [];
 function getDB(): Promise<any> { return new Promise(r => { if (_db) { r(_db); return; } _dbCbs.push(r); }); }
+function getAuth(): Promise<any> { return new Promise(r => { if (_auth) { r(_auth); return; } _authCbs.push(r); }); }
+function loadScript(src: string): Promise<void> {
+  return new Promise(res => { const s = document.createElement("script"); s.src = src; s.onload = () => res(); document.head.appendChild(s); });
+}
 function initFirebase() {
   if (typeof window === "undefined") return;
-  var s1 = document.createElement("script"); s1.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
-  s1.onload = () => { var s2 = document.createElement("script"); s2.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
-    s2.onload = () => { if (!(window as any).firebase.apps.length) (window as any).firebase.initializeApp(FIREBASE_CONFIG); _db = (window as any).firebase.firestore(); _dbCbs.forEach(c => c(_db)); _dbCbs = []; };
-    document.head.appendChild(s2); }; document.head.appendChild(s1);
+  const B = "https://www.gstatic.com/firebasejs/10.7.1/";
+  loadScript(B + "firebase-app-compat.js")
+    .then(() => Promise.all([loadScript(B + "firebase-firestore-compat.js"), loadScript(B + "firebase-auth-compat.js")]))
+    .then(() => {
+      const fb = (window as any).firebase;
+      if (!fb.apps.length) fb.initializeApp(FIREBASE_CONFIG);
+      _db = fb.firestore(); _dbCbs.forEach(c => c(_db)); _dbCbs = [];
+      _auth = fb.auth(); _authCbs.forEach(c => c(_auth)); _authCbs = [];
+    });
 }
 if (typeof window !== "undefined") initFirebase();
+
+// ─── ADMIN AUTH (Firebase Authentication — no password lives in this code) ────
+async function adminSignIn(email: string, password: string) {
+  const auth = await getAuth();
+  await auth.signInWithEmailAndPassword(email.trim(), password);
+}
+async function adminSignOut() { try { const auth = await getAuth(); await auth.signOut(); } catch (e) { /* noop */ } }
+function onAdminAuth(cb: (user: any) => void) { getAuth().then(auth => auth.onAuthStateChanged(cb)); }
 async function fsGet(col: string, id: string) { try { const db=await getDB(),d=await db.collection(col).doc(id).get(); return d.exists?d.data():null; } catch(e){return null;} }
 async function fsSet(col: string, id: string, data: any) { try { const db=await getDB(); await db.collection(col).doc(id).set(data); return true; } catch(e){return false;} }
 async function fsAdd(col: string, data: any) { try { const db=await getDB(),r=await db.collection(col).add(data); return r.id; } catch(e){return null;} }
@@ -36,7 +54,8 @@ async function saveLogo(url:string) { try { await fsSet("settings","logo",{url,u
 async function deleteLogo() { try { await fsSet("settings","logo",{url:LOGO_URL,updated:new Date().toISOString()}); localStorage.removeItem("ip-logo"); } catch(e){localStorage.removeItem("ip-logo");} }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const OWNER_PASSWORD = "PROPS0326";
+// Admin credentials are NOT stored in this codebase. Sign-in is handled by
+// Firebase Authentication (the user lives in the Firebase console).
 const PAYPAL_CLIENT_ID = "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
 const LOGO_URL = "https://i.postimg.cc/1X5hxnT4/Untitled-design-(36).png";
 const CATEGORIES = ["Props","Effects","Bundles","Games","Accessories","Other"];
@@ -459,9 +478,16 @@ function PolicyView({type,setView,t}:any) {
   );
 }
 
-function LoginView({onLogin,ownerPassword,t}:any) {
-  const [pw,setPw]=useState(""),[err,setErr]=useState(false);
-  function handle(){if(pw.trim()===ownerPassword)onLogin();else{setErr(true);setTimeout(()=>setErr(false),1800);}}
+function LoginView({onLogin,t}:any) {
+  const [email,setEmail]=useState(""),[pw,setPw]=useState("");
+  const [err,setErr]=useState(false),[busy,setBusy]=useState(false);
+  async function handle(){
+    if(busy) return;
+    setBusy(true);
+    try{ await adminSignIn(email,pw); onLogin(); }
+    catch(e){ setErr(true); setTimeout(()=>setErr(false),2400); }
+    finally{ setBusy(false); }
+  }
   return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"calc(100vh - 64px)",background:BG,padding:24,position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,212,255,0.05),transparent 65%)",top:"50%",left:"50%",transform:"translate(-50%,-50%)",pointerEvents:"none"}}/>
@@ -471,13 +497,16 @@ function LoginView({onLogin,ownerPassword,t}:any) {
         <h2 className="orb" style={{fontSize:28,letterSpacing:"0.1em",color:C,marginBottom:8,animation:"pulseC 4s ease-in-out infinite"}}>{t.login}</h2>
         <p className="mono" style={{color:T4,fontSize:10,marginBottom:32,letterSpacing:"0.1em"}}>{t.loginSub}</p>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <motion.input type="password" className="mono" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
+          <motion.input type="email" autoComplete="username" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
+            style={{padding:"12px 14px",borderRadius:4,border:`1px solid ${BRC}`,fontSize:14,textAlign:"center",outline:"none",width:"100%",background:BG3,color:T1,fontFamily:"'Rajdhani',sans-serif"}}
+            placeholder="admin@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}} autoFocus/>
+          <motion.input type="password" autoComplete="current-password" className="mono" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
             style={{padding:"12px 14px",borderRadius:4,border:`1px solid ${BRC}`,fontSize:20,letterSpacing:"0.3em",textAlign:"center",outline:"none",width:"100%",background:BG3,color:C,fontFamily:"'Share Tech Mono',monospace"}}
-            placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}} autoFocus/>
+            placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}}/>
           <AnimatePresence>
             {err&&<motion.p initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}} exit={{opacity:0,height:0}} className="mono" style={{color:P,fontSize:10,letterSpacing:"0.12em"}}>{t.incorrectPw}</motion.p>}
           </AnimatePresence>
-          <NBtn variant="fill" size="lg" full onClick={handle}>{t.login}</NBtn>
+          <NBtn variant="fill" size="lg" full onClick={handle}>{busy?"…":t.login}</NBtn>
         </div>
       </motion.div>
     </div>
@@ -1203,6 +1232,14 @@ export default function App() {
   const [toast,setToast]=useState<string|null>(null);
   const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
   const t=TR[lang];
+  // The admin panel has NO entry point in the UI — it is reachable only by
+  // visiting /admin (or #admin), which lands on the password screen.
+  useEffect(()=>{
+    const path=window.location.pathname.replace(/\/+$/,"").toLowerCase();
+    if(path==="/admin"||window.location.hash.toLowerCase()==="#admin") setView("login");
+  },[]);
+  // Session comes from Firebase Auth, so a refresh keeps the owner signed in.
+  useEffect(()=>{ onAdminAuth((u:any)=>setIsOwner(!!u)); },[]);
   useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
   useEffect(()=>{fsListen("orders",setOrders);},[]);
   const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
@@ -1246,7 +1283,7 @@ export default function App() {
           {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
           {view==="warranty"&&<PolicyView type="warranty" setView={setView} t={t}/>}
           {view==="shipping"&&<PolicyView type="shipping" setView={setView} t={t}/>}
-          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} ownerPassword={OWNER_PASSWORD} t={t}/>}
+          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} t={t}/>}
           {view==="admin"&&isOwner&&<AdminView products={products} orders={orders} persistProducts={persistProducts}/>}
       </div>
 
@@ -1338,13 +1375,11 @@ function Header({view,setView,isOwner,setIsOwner,lang,setLang,t}:any) {
               </motion.button>
             ))}
           </div>
-          {isOwner
-            ?<>
-               <motion.button onClick={()=>setView("admin")} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:view==="admin"?C:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>⚙️</motion.button>
-               <motion.button onClick={()=>{setIsOwner(false);setView("shop");}} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>🚪</motion.button>
-             </>
-            :<motion.button onClick={()=>setView("login")} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>👤</motion.button>
-          }
+          {/* No admin entry point anywhere in the UI — the panel is reached only via /admin.
+              Once signed in, keep a logout so the owner can end the session. */}
+          {isOwner&&(
+            <motion.button onClick={()=>{adminSignOut();setIsOwner(false);setView("shop");}} title="Log out" style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>🚪</motion.button>
+          )}
         </div>
       </div>
     </motion.header>

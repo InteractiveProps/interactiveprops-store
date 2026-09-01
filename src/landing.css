@@ -439,6 +439,14 @@ html.lenis, html.lenis body{ height:auto; }
   .ip-landing .nav-links{ display:none; }
   .ip-landing .nav-burger{ display:flex; }
   .ip-landing .mobile-menu:not([hidden]){ display:block; }
+  /* keep the whole bar inside the viewport so the burger is never pushed off-screen */
+  .ip-landing .nav{ padding:0 12px; gap:10px; }
+  .ip-landing .brand{ min-width:0; flex-shrink:1; gap:8px; }
+  .ip-landing .brand-logo{ width:34px; height:34px; }
+  .ip-landing .brand-name{ font-size:.74rem; letter-spacing:.08em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ip-landing .nav-tools{ gap:8px; margin-left:auto; }
+  .ip-landing .nav-icon, .ip-landing .nav-burger{ width:36px; height:36px; }
+  .ip-landing .lang-toggle button{ padding:5px 8px; font-size:.66rem; }
   .ip-landing .hero{ min-height:auto; display:block; padding-top:72px; }
   .ip-landing .hero-media{ position:relative; height:auto; }
   .ip-landing .hero-media img{ width:100%; height:auto; object-fit:contain; display:block; }
@@ -454,6 +462,10 @@ html.lenis, html.lenis body{ height:auto; }
   .ip-landing .faq-wrap{ grid-template-columns:1fr; gap:30px; }
   .ip-landing .pol-grid{ grid-template-columns:1fr; }
   .ip-landing .foot-grid{ grid-template-columns:1fr 1fr; gap:32px; }
+}
+@media (max-width: 400px){
+  /* very narrow phones: drop the wordmark, keep the logo — burger always visible */
+  .ip-landing .brand-name{ display:none; }
 }
 @media (max-width: 560px){
   .ip-landing .features{ grid-template-columns:1fr; }
