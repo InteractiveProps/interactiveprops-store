@@ -729,9 +729,7 @@ function usePayPal(clientId:string) {
   return loaded;
 }
 
-// ─── LANDING (scroll-cinematic single page) ────────────────────────────────────
-const HERO_FRAME_COUNT = 115;
-const heroFramePath = (i:number) => `/frames/hero/frame_${String(i).padStart(4,"0")}.jpg`;
+// ─── LANDING (v4 neon single page) ─────────────────────────────────────────────
 const ACCENTS = ["cyan","pink","violet","yellow"];
 
 // Traducciones de la landing (la prosa; los nombres/descripciones de producto
@@ -741,6 +739,13 @@ const LT:Record<string,any> = {
     navProducts:"Products",navHow:"How it works",navPlatforms:"Platforms",navFaq:"FAQ",navContact:"Contact",
     tagL:"INTERACTIVE STREAMING DEVICES",tagR:"LIVE · REAL-TIME",scroll:"SCROLL",
     marquee:["GIFTS","DONATIONS","SUBS","ALERTS","WEBHOOKS","CHANNEL POINTS","GOALS","CUSTOM TRIGGERS"],
+    heroTitleA:"Streaming should be more than watching. It should be ",heroTitleWord:"interactive.",
+    heroLead:"Interactive Props builds physical streaming devices that let viewers trigger real-world actions live — through gifts, donations, subscriptions, alerts, webhooks, channel points, goals, and custom triggers.",
+    heroBtn1:"Explore devices",heroBtn2:"See how it works",
+    triggersLabel:"Triggered by what your chat does",
+    triggerNames:["Gifts","Donations","Subscriptions","Alerts","Webhooks","Channel points","Goals","Custom triggers"],
+    ctaTitle:"Turn chat into real-world actions.",ctaSubA:"Make your stream ",ctaSubWord:"unforgettable.",
+    ctaMailQ:"Questions, setup help or partnerships?",
     introKicker:"Welcome to Interactive Props",
     introHeadA:"Streaming should be more than watching.",introHeadB:"It should be interactive.",
     introSub:<>We build interactive streaming devices that connect your viewers directly to your stream in a physical, real-life way. From the <b>Interactive Blaster</b> firing foam darts mid-stream, to the <b>Interactive Silly String</b> launching chaos, to the <b>Interactive Pump</b> creating audience-triggered moments — every product turns viewers into participants instead of spectators.</>,
@@ -795,6 +800,13 @@ const LT:Record<string,any> = {
     navProducts:"Productos",navHow:"Cómo funciona",navPlatforms:"Plataformas",navFaq:"Preguntas",navContact:"Contacto",
     tagL:"DISPOSITIVOS DE STREAMING INTERACTIVOS",tagR:"EN VIVO · TIEMPO REAL",scroll:"BAJÁ",
     marquee:["REGALOS","DONACIONES","SUBS","ALERTAS","WEBHOOKS","PUNTOS DE CANAL","METAS","TRIGGERS"],
+    heroTitleA:"El streaming debería ser más que mirar. Debería ser ",heroTitleWord:"interactivo.",
+    heroLead:"Interactive Props crea dispositivos físicos de streaming que permiten a tus viewers activar acciones del mundo real en vivo — mediante regalos, donaciones, suscripciones, alertas, webhooks, puntos de canal, metas y triggers personalizados.",
+    heroBtn1:"Explorar dispositivos",heroBtn2:"Ver cómo funciona",
+    triggersLabel:"Activado por lo que hace tu chat",
+    triggerNames:["Regalos","Donaciones","Suscripciones","Alertas","Webhooks","Puntos de canal","Metas","Triggers personalizados"],
+    ctaTitle:"Convierte el chat en acciones reales.",ctaSubA:"Haz tu stream ",ctaSubWord:"inolvidable.",
+    ctaMailQ:"¿Preguntas, ayuda con la configuración o colaboraciones?",
     introKicker:"Bienvenido a Interactive Props",
     introHeadA:"El streaming debería ser más que mirar.",introHeadB:"Debería ser interactivo.",
     introSub:<>Creamos dispositivos de streaming interactivos que conectan a tus viewers directamente con tu stream de forma física y real. Desde el <b>Interactive Blaster</b> disparando dardos de gomaespuma en vivo, al <b>Interactive Silly String</b> desatando el caos, hasta el <b>Interactive Pump</b> creando momentos activados por la audiencia — cada producto convierte a los espectadores en participantes.</>,
@@ -866,6 +878,7 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
   const [checkoutOpen,setCheckoutOpen] = useState(false);
   const [toast,setToast] = useState<string|null>(null);
   const [openFaq,setOpenFaq] = useState<number>(-1);
+  const [menuOpen,setMenuOpen] = useState(false);
 
   const cartCount = cart.reduce((s:number,i:any)=>s+i.qty,0);
   const cartTotal = cart.reduce((s:number,i:any)=>s+i.price*i.qty,0);
@@ -893,73 +906,17 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
     else if(el) el.scrollIntoView({behavior:"smooth"});
   }
 
-  // Canvas frame-scrub + Lenis + reveal + stat counters
+  // Lenis smooth-scroll + scroll reveals + stat counters + nav scrolled state
   useEffect(()=>{
     const root=rootRef.current; if(!root) return;
-    const section=root.querySelector("#hero") as HTMLElement|null;
-    const canvas=root.querySelector("#hero-canvas") as HTMLCanvasElement|null;
-    const bar=root.querySelector("#progress-fill") as HTMLElement|null;
     const nav=root.querySelector(".nav") as HTMLElement|null;
-    const hint=root.querySelector("#scroll-hint") as HTMLElement|null;
-    let rafId=0, current=-1, firstDrawn=false;
-    const images:HTMLImageElement[]=[];
-    let ctx:CanvasRenderingContext2D|null=null;
-    const lines= section ? [...section.querySelectorAll(".reveal-line")] as HTMLElement[] : [];
-
-    function draw(index:number){
-      if(!canvas||!ctx) return;
-      const img=images[index]; if(!img||!img.complete||!img.naturalWidth) return;
-      const cw=canvas.clientWidth, ch=canvas.clientHeight;
-      // Pequeño aire arriba (para no chocar de lleno con la nav) — el resto lo
-      // cubre la imagen, anclada debajo de ese margen y recortada por abajo.
-      const inset=Math.min(24, ch*0.03);
-      const availH=ch-inset;
-      const scale=Math.max(cw/img.naturalWidth, availH/img.naturalHeight);
-      const dw=img.naturalWidth*scale, dh=img.naturalHeight*scale;
-      const dx=(cw-dw)/2, dy=inset;
-      ctx.fillStyle="#07040f"; ctx.fillRect(0,0,cw,ch);
-      ctx.drawImage(img,dx,dy,dw,dh);
-    }
-    function resize(){
-      if(!canvas) return;
-      ctx=canvas.getContext("2d",{alpha:false});
-      const dpr=Math.min(window.devicePixelRatio||1,2);
-      canvas.width=canvas.clientWidth*dpr; canvas.height=canvas.clientHeight*dpr;
-      ctx?.setTransform(dpr,0,0,dpr,0,0);
-      draw(current<0?0:current);
-    }
-    function update(){
-      if(!section) return;
-      const rect=section.getBoundingClientRect();
-      if(rect.bottom<-window.innerHeight||rect.top>window.innerHeight) return;
-      const scrollable=rect.height-window.innerHeight;
-      const p=Math.min(Math.max(-rect.top/scrollable,0),1);
-      const idx=Math.min(HERO_FRAME_COUNT-1,Math.floor(p*(HERO_FRAME_COUNT-1)));
-      if(idx!==current){ current=idx; draw(idx); }
-      if(bar) bar.style.width=(p*100).toFixed(2)+"%";
-      for(const el of lines){
-        const a=parseFloat(el.dataset.in||"0"), b=parseFloat(el.dataset.out||"1");
-        const mid=(a+b)/2, half=(b-a)/2;
-        let o=1-Math.abs(p-mid)/half; o=Math.max(0,Math.min(1,o));
-        el.style.opacity=o.toFixed(3);
-        el.style.transform=`translateX(-50%) translateY(${(1-o)*26}px)`;
-      }
-    }
-
-    // preload frames
-    for(let i=0;i<HERO_FRAME_COUNT;i++){
-      const img=new Image(); img.src=heroFramePath(i+1);
-      img.onload=()=>{ if(!firstDrawn){ firstDrawn=true; draw(0); } };
-      images[i]=img;
-    }
-    window.addEventListener("resize",resize); resize();
+    let rafId=0;
 
     const lenis=new Lenis({lerp:0.09,smoothWheel:true}); lenisRef.current=lenis; (window as any).__lenis=lenis;
-    function raf(time:number){ lenis.raf(time); update(); rafId=requestAnimationFrame(raf); }
+    function raf(time:number){ lenis.raf(time); rafId=requestAnimationFrame(raf); }
     rafId=requestAnimationFrame(raf);
     lenis.on("scroll",({scroll}:any)=>{
       if(nav) nav.classList.toggle("scrolled",scroll>40);
-      if(hint) hint.style.opacity=scroll>60?"0":"1";
     });
 
     const io=new IntersectionObserver((entries)=>{
@@ -980,8 +937,20 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
     },{threshold:0.2,rootMargin:"0px 0px -8% 0px"});
     root.querySelectorAll(".reveal, .stat-num").forEach(el=>io.observe(el));
 
-    return ()=>{ cancelAnimationFrame(rafId); window.removeEventListener("resize",resize); io.disconnect(); lenis.destroy(); lenisRef.current=null; };
+    return ()=>{ cancelAnimationFrame(rafId); io.disconnect(); lenis.destroy(); lenisRef.current=null; };
   },[]);
+
+  // Neon trigger icons for the auto-scrolling "Triggered by what your chat does" bar
+  const triggers = [
+    {c:"#ff3ea5", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M3 12h18M12 8v13M12 8S9.5 3.5 7.5 5s1 3 4.5 3M12 8s2.5-4.5 4.5-3-1 3-4.5 3"/></svg>},
+    {c:"#35e0a1", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.2C14 8.4 13 8 12 8c-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.9 2.5 2-1.1 2-2.5 2c-1 0-2-.4-2.5-1.2M12 6.5v11"/></svg>},
+    {c:"#a855f7", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 8l3.5 3L12 5l4.5 6L20 8l-1.5 10h-13z"/></svg>},
+    {c:"#ff8a3d", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 15V10a6 6 0 1 0-12 0v5l-2 3h16z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>},
+    {c:"#2bd4ff", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 10a3 3 0 1 1 4 2.8L11 16"/><path d="M15 12a3 3 0 1 1-1 5.8H10"/><path d="M8.5 13.5A3 3 0 1 1 6 19"/></svg>},
+    {c:"#4ade80", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 3 1-6.1L3.2 9.5l6.1-.9z"/></svg>},
+    {c:"#ff5c8a", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>},
+    {c:"#5b8cff", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M13 3L5 13h5l-1 8 8-11h-5z"/></svg>},
+  ];
 
   return (
     <div className="ip-landing" ref={rootRef}>
@@ -989,14 +958,12 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
       <header className="nav">
         <button className="brand" onClick={()=>goTo("#top")}>
           <img src="/landing/logo.png" alt="Interactive Props" className="brand-logo"/>
-          <span className="brand-name">INTERACTIVE<span className="brand-name-2">PROPS</span></span>
+          <span className="brand-name">INTERACTIVE&nbsp;<span className="brand-name-2">PROPS</span></span>
         </button>
         <nav className="nav-links">
           <a onClick={()=>goTo("#products")}>{L.navProducts}</a>
           <a onClick={()=>goTo("#how")}>{L.navHow}</a>
-          <a onClick={()=>goTo("#platforms")}>{L.navPlatforms}</a>
           <a onClick={()=>goTo("#faq")}>{L.navFaq}</a>
-          <a onClick={()=>goTo("#contact")}>{L.navContact}</a>
         </nav>
         <div className="nav-tools">
           <div className="lang-toggle">
@@ -1007,35 +974,52 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
             🛒{cartCount>0&&<span className="cart-count">{cartCount}</span>}
           </button>
           <button className="nav-icon" aria-label={isOwner?"Admin":"Owner login"} onClick={()=>setView(isOwner?"admin":"login")}>{isOwner?"⚙️":"👤"}</button>
+          <button className={"nav-burger"+(menuOpen?" is-open":"")} aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(o=>!o)}>
+            <span/><span/><span/>
+          </button>
         </div>
+        <nav className="mobile-menu" hidden={!menuOpen}>
+          <a onClick={()=>{goTo("#products");setMenuOpen(false);}}>{L.navProducts}</a>
+          <a onClick={()=>{goTo("#how");setMenuOpen(false);}}>{L.navHow}</a>
+          <a onClick={()=>{goTo("#faq");setMenuOpen(false);}}>{L.navFaq}</a>
+        </nav>
       </header>
 
       <span id="top"/>
 
-      {/* HERO — scroll-scrubbed cinematic */}
-      <section className="cinematic" id="hero">
-        <div className="sticky">
-          <canvas id="hero-canvas"/>
-          <div className="hero-vignette"/>
+      {/* HERO — static full-bleed image with floating neon chips */}
+      <section className="hero" id="hero">
+        <div className="hero-media"><img src="/landing/hero.jpg" alt="The Interactive Props lineup on a neon streaming desk"/></div>
+        <div className="hero-scrim"/>
+        <div className="hero-badges" aria-hidden="true">
+          <span className="chip chip-gift"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M3 12h18M12 8v13M12 8S9.5 3.5 7.5 5s1 3 4.5 3M12 8s2.5-4.5 4.5-3-1 3-4.5 3"/></svg>GIFT</span>
+          <span className="chip chip-webhook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 10a3 3 0 1 1 4 2.8L11 16"/><path d="M15 12a3 3 0 1 1-1 5.8H10"/><path d="M8.5 13.5A3 3 0 1 1 6 19"/></svg>WEBHOOK</span>
+          <span className="chip chip-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 15V10a6 6 0 1 0-12 0v5l-2 3h16z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>ALERT</span>
+          <span className="chip chip-sub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 3 1-6.1L3.2 9.5l6.1-.9z"/></svg>SUB</span>
+        </div>
+        <div className="hero-inner wrap">
           <div className="hero-copy">
-            <h2 className="hero-line reveal-line" data-in="0.50" data-out="0.74">GIFTS. ALERTS. <span className="grad">WEBHOOKS.</span></h2>
-            <h2 className="hero-line reveal-line" data-in="0.78" data-out="1.00">REAL PROPS. <span className="grad">REAL CHAOS.</span></h2>
+            <h1 className="hero-title reveal">{L.heroTitleA}<span className="grad-word">{L.heroTitleWord}</span></h1>
+            <p className="hero-lead reveal">{L.heroLead}</p>
+            <div className="hero-cta reveal">
+              <button className="btn btn-solid" onClick={()=>goTo("#products")}>{L.heroBtn1} <span className="arw">→</span></button>
+              <button className="btn btn-ghost" onClick={()=>goTo("#how")}>{L.heroBtn2} <span className="tri">▶</span></button>
+            </div>
           </div>
-          <div className="hero-tag tl">{L.tagL}</div>
-          <div className="hero-tag tr">{L.tagR}</div>
-          <div className="progress"><div className="progress-fill" id="progress-fill"/></div>
-          <div className="scroll-hint" id="scroll-hint">{L.scroll}&nbsp;▾</div>
         </div>
       </section>
 
-      {/* MARQUEE */}
-      <div className="marquee" aria-hidden="true">
-        <div className="marquee-track">
-          {[0,1].map(rep=>(
-            <span key={rep} style={{display:"inline-flex",alignItems:"center",gap:26}}>
-              {L.marquee.map((w:string,wi:number)=>(<span key={wi} style={{display:"inline-flex",alignItems:"center",gap:26}}><span>{w}</span><i>✦</i></span>))}
-            </span>
-          ))}
+      {/* TRIGGERS STRIP — label + auto-scrolling neon icon bar */}
+      <div className="triggers-wrap wrap">
+        <p className="triggers-label reveal">{L.triggersLabel}</p>
+        <div className="triggers reveal">
+          <div className="marquee">
+            {[0,1].flatMap(rep=>triggers.map((tg:any,i:number)=>(
+              <span className="trig" style={{"--c":tg.c} as any} key={rep+"-"+i}>
+                <span className="t-ic">{tg.icon}</span>{L.triggerNames[i]}
+              </span>
+            )))}
+          </div>
         </div>
       </div>
 
@@ -1058,7 +1042,14 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
           </div>
           <div className="steps">
             {L.steps.map((s:any,i:number)=>(
-              <article className="step reveal" key={i}><div className="step-num">{String(i+1).padStart(2,"0")}</div><h3>{s.h}</h3><p>{s.p}</p><div className="step-tags">{s.tags.map((tg:string,ti:number)=><span key={ti}>{tg}</span>)}</div></article>
+              <article className="step reveal" key={i}>
+                <div className="step-card">
+                  <span className="step-num">{i+1}</span>
+                  <div className="step-img"><img src={["/landing/hiw-viewer.jpg","/landing/hiw-trigger.jpg","/landing/hiw-prop.jpg"][i]} alt={s.h} loading="lazy"/></div>
+                  <h3 className="step-cap">{s.h}</h3>
+                  <p className="step-sub">{s.p}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>
@@ -1110,22 +1101,6 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* PLATFORMS */}
-      <section className="platforms" id="platforms">
-        <div className="wrap">
-          <div className="sec-head reveal">
-            <p className="kicker">{L.platKicker}</p>
-            <h2 className="sec-title">{L.platTitleA}<span className="grad">{L.platTitleMid}</span></h2>
-            <p className="sec-desc">{L.platDesc}</p>
-          </div>
-          <div className="plat-grid">
-            {L.plats.map((pl:any,i:number)=>(
-              <div className="plat reveal" key={i}><span className="plat-name">{pl.name}</span><span className="plat-sub">{pl.sub}</span></div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* STATS */}
       <section className="stats">
         <div className="wrap stat-row">
@@ -1165,15 +1140,18 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA BANNER */}
       <section className="cta" id="contact">
-        <div className="cta-glow"/>
+        <div className="cta-media"><img src="/landing/banner.jpg" alt="" aria-hidden="true"/></div>
+        <div className="cta-scrim"/>
         <div className="wrap cta-inner reveal">
-          <p className="kicker">{L.ctaKicker}</p>
-          <h2 className="cta-head">{L.ctaHeadA}<span className="grad">{L.ctaHeadMid}</span></h2>
-          <p className="cta-sub">{L.ctaSub}</p>
-          <a className="btn btn-big" href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a>
-          <p className="cta-fine">{L.ctaFine}</p>
+          <h2 className="cta-title">{L.ctaTitle}</h2>
+          <p className="cta-sub-line">{L.ctaSubA}<span className="grad-word">{L.ctaSubWord}</span></p>
+          <div className="hero-cta cta-btns">
+            <button className="btn btn-solid" onClick={()=>goTo("#products")}>{L.heroBtn1} <span className="arw">→</span></button>
+            <button className="btn btn-ghost" onClick={()=>goTo("#how")}>{L.heroBtn2} <span className="tri">▶</span></button>
+          </div>
+          <p className="cta-mail">{L.ctaMailQ} <a href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a></p>
         </div>
       </section>
 
@@ -1192,7 +1170,6 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
             <h5>{L.footCompany}</h5>
             <a onClick={()=>goTo("#about")}>{L.footAbout}</a>
             <a onClick={()=>goTo("#how")}>{L.footHow}</a>
-            <a onClick={()=>goTo("#platforms")}>{L.footPlatforms}</a>
             <a onClick={()=>goTo("#faq")}>{L.footFaq}</a>
           </div>
           <div className="foot-col">
