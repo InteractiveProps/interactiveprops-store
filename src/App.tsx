@@ -69,37 +69,6 @@ const DEFAULT_PRODUCTS = [
   {id:7,name:"Interactive Stellar Dash",price:0.99,type:"digital",category:"Games",desc:"A fast-paced arcade space runner where live chat controls the chaos. Viewers trigger obstacles, attacks, and difficulty changes in real time — turning every match into an unpredictable battle for survival built for streamers.",emoji:"🚀",img:"https://i.imgur.com/jlRiv7Q.png",stock:99,active:true},
 ];
 
-const FAQ_DATA = [
-  {category:"General Questions",items:[
-    {q:"What is Interactive Props?",a:"Interactive Props creates interactive streaming products that allow viewers to trigger real-life effects during livestreams using gifts, donations, alerts, webhooks, and other stream integrations."},
-    {q:"Who are these products made for?",a:"Our products are designed for streamers, TikTok creators, Twitch creators, Kick streamers, YouTubers, IRL content creators, gaming creators, and anyone looking to create interactive live experiences."},
-    {q:"Do your products work with TikTok Live?",a:"Yes. Many of our products can work with TikTok Live through supported third-party tools, webhooks, or stream automation platforms."},
-    {q:"Do your products work with Twitch, Kick, or YouTube?",a:"Yes. Our products are designed to work with multiple streaming platforms depending on your setup and software integration."},
-  ]},
-  {category:"Product & Setup",items:[
-    {q:"Are the products difficult to set up?",a:"No. Most setups only require Wi-Fi, a browser, and simple webhook or streaming tool integration. We design our products to be as beginner-friendly as possible."},
-    {q:"Do I need programming experience?",a:"No programming experience is required for most basic setups. We provide guides and support to help you get started."},
-    {q:"Can viewers control the products live?",a:"Yes. Depending on your setup, viewers can trigger products through gifts, donations, channel points, stream events, chat commands, goals, and custom automation tools."},
-    {q:"Can multiple products be used together?",a:"Yes. Many streamers combine multiple Interactive Props products to create larger interactive setups and more engaging livestream experiences."},
-  ]},
-  {category:"Orders & Shipping",items:[
-    {q:"How long does shipping take?",a:"Processing and shipping times vary depending on product demand. Estimated delivery times are shown during checkout whenever available."},
-    {q:"Do you ship internationally?",a:"International shipping availability may vary depending on the destination country and product type."},
-    {q:"Will I receive tracking information?",a:"Yes. Once your order ships, tracking information will be sent to the email used during checkout."},
-    {q:"Can I cancel my order?",a:"Orders can only be canceled before processing or shipment preparation begins."},
-  ]},
-  {category:"Returns & Warranty",items:[
-    {q:"Do you accept returns?",a:"Yes. Eligible unused products may be returned within 14 days of delivery in original condition and packaging.",link:"returns"},
-    {q:"What if my product arrives damaged?",a:"Please contact us within 48 hours of delivery with photos or videos of the issue so we can help resolve it quickly."},
-    {q:"Do your products include a warranty?",a:"Yes. Eligible products include a limited 90-day warranty covering manufacturing defects under normal use.",link:"warranty"},
-  ]},
-  {category:"Support",items:[
-    {q:"How do I contact support?",a:"You can reach us anytime at interactiveprops.official@gmail.com or through our Contact page.",link:"contact"},
-    {q:"Do you offer setup help?",a:"Yes. We aim to help customers get their products working properly and provide setup guidance whenever possible."},
-    {q:"Will more products be released?",a:"Absolutely. We are continuously developing new interactive products and ideas for creators and livestreamers."},
-  ]},
-];
-
 // ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
 const TR: Record<string,any> = {
   en:{
@@ -447,45 +416,6 @@ function ContactView({setView,t}:any) {
   );
 }
 
-function FAQView({setView,t}:any) {
-  const [open,setOpen]=useState<number|null>(null);
-  let idx=0;
-  return (
-    <PageShell title="FAQs" setView={setView} t={t}>
-      <p className="mono" style={{color:T4,fontSize:9,letterSpacing:"0.16em",marginBottom:52,textTransform:"uppercase"}}>Everything you need to know about Interactive Props</p>
-      {FAQ_DATA.map(section=>(
-        <div key={section.category} style={{marginBottom:48}}>
-          <h2 className="orb" style={{fontSize:13,fontWeight:800,letterSpacing:"0.16em",color:C,textTransform:"uppercase",marginBottom:16}}>{section.category}</h2>
-          <div style={{display:"flex",flexDirection:"column",gap:2}}>
-            {section.items.map((item:any)=>{
-              const myIdx=idx++;const isOpen=open===myIdx;
-              return (
-                <motion.div key={myIdx} style={{background:isOpen?BG3:BG2,border:`1px solid ${isOpen?BRC:BR}`,borderRadius:4,overflow:"hidden"}} animate={{boxShadow:isOpen?`0 0 20px rgba(0,212,255,0.08)`:"0 0 0px transparent"}} transition={{duration:0.25}}>
-                  <motion.button onClick={()=>setOpen(isOpen?null:myIdx)} style={{width:"100%",background:"none",border:"none",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",gap:12,textAlign:"left",fontFamily:"'Rajdhani',sans-serif"}} whileHover={{backgroundColor:"rgba(255,255,255,0.02)"}} transition={{duration:0.15}}>
-                    <span style={{fontSize:14,fontWeight:600,color:isOpen?C:T2,lineHeight:1.4}}>{item.q}</span>
-                    <motion.span className="mono" style={{color:C,fontSize:16,flexShrink:0,fontWeight:700}} animate={{rotate:isOpen?45:0}} transition={{duration:0.2}}>+</motion.span>
-                  </motion.button>
-                  <AnimatePresence initial={false}>
-                    {isOpen&&<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.28,ease:EASE}}>
-                      <div style={{padding:"0 20px 18px",borderTop:`1px solid ${BR}`}}>
-                        <p style={{color:T3,fontSize:14,lineHeight:1.8,marginTop:14,fontWeight:500}}>{item.a}</p>
-                        {item.link&&<NBtn variant="cyan" size="sm" style={{marginTop:12}} onClick={()=>setView(item.link)}>{t.viewPolicy}</NBtn>}
-                      </div>
-                    </motion.div>}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      <div style={{background:BG2,border:`1px solid ${BR}`,borderRadius:6,padding:"32px",textAlign:"center",marginTop:16}}>
-        <p style={{color:T3,fontSize:14,marginBottom:20,fontWeight:500}}>{t.stillQuestions}</p>
-        <NBtn variant="fill" size="lg" onClick={()=>setView("contact")}>{t.contactUs}</NBtn>
-      </div>
-    </PageShell>
-  );
-}
 
 function PolicyView({type,setView,t}:any) {
   const title=type==="returns"?"RETURNS & REFUNDS":type==="warranty"?"WARRANTY POLICY":"SHIPPING & DELIVERY";
@@ -746,6 +676,11 @@ const LT:Record<string,any> = {
     triggerNames:["Gifts","Donations","Subscriptions","Alerts","Webhooks","Channel points","Goals","Custom triggers"],
     ctaTitle:"Turn chat into real-world actions.",ctaSubA:"Make your stream ",ctaSubWord:"unforgettable.",
     ctaMailQ:"Questions, setup help or partnerships?",
+    featuredKicker:"The lineup",featuredTitleA:"Featured ",featuredTitleWord:"products",viewAll:"View all products",
+    prodPageEyebrow:"The lineup",prodPageTitleA:"All ",prodPageTitleWord:"products",
+    prodPageSub:"Physical streaming devices your audience triggers live — through gifts, donations, subscriptions, alerts, webhooks, channel points, goals and custom triggers.",
+    gamesSoonTitle:"Games are coming soon",
+    gamesSoonBody:"Interactive mini-games your viewers control live are in the works. Want to be first to know when they drop? Reach us at",
     introKicker:"Welcome to Interactive Props",
     introHeadA:"Streaming should be more than watching.",introHeadB:"It should be interactive.",
     introSub:<>We build interactive streaming devices that connect your viewers directly to your stream in a physical, real-life way. From the <b>Interactive Blaster</b> firing foam darts mid-stream, to the <b>Interactive Silly String</b> launching chaos, to the <b>Interactive Pump</b> creating audience-triggered moments — every product turns viewers into participants instead of spectators.</>,
@@ -807,6 +742,11 @@ const LT:Record<string,any> = {
     triggerNames:["Regalos","Donaciones","Suscripciones","Alertas","Webhooks","Puntos de canal","Metas","Triggers personalizados"],
     ctaTitle:"Convierte el chat en acciones reales.",ctaSubA:"Haz tu stream ",ctaSubWord:"inolvidable.",
     ctaMailQ:"¿Preguntas, ayuda con la configuración o colaboraciones?",
+    featuredKicker:"La línea",featuredTitleA:"Productos ",featuredTitleWord:"destacados",viewAll:"Ver todos los productos",
+    prodPageEyebrow:"La línea",prodPageTitleA:"Todos los ",prodPageTitleWord:"productos",
+    prodPageSub:"Dispositivos físicos de streaming que tu audiencia activa en vivo — mediante regalos, donaciones, suscripciones, alertas, webhooks, puntos de canal, metas y triggers personalizados.",
+    gamesSoonTitle:"Los juegos llegan pronto",
+    gamesSoonBody:"Estamos preparando mini-juegos interactivos que tus viewers controlan en vivo. ¿Querés ser el primero en enterarte cuando salgan? Escribinos a",
     introKicker:"Bienvenido a Interactive Props",
     introHeadA:"El streaming debería ser más que mirar.",introHeadB:"Debería ser interactivo.",
     introSub:<>Creamos dispositivos de streaming interactivos que conectan a tus viewers directamente con tu stream de forma física y real. Desde el <b>Interactive Blaster</b> disparando dardos de gomaespuma en vivo, al <b>Interactive Silly String</b> desatando el caos, hasta el <b>Interactive Pump</b> creando momentos activados por la audiencia — cada producto convierte a los espectadores en participantes.</>,
@@ -870,34 +810,101 @@ const PROD_DESC_ES:Record<string,string> = {
   "Interactive Stellar Dash":"Un runner espacial arcade a toda velocidad donde el chat en vivo controla el caos. Los viewers activan obstáculos, ataques y cambios de dificultad en tiempo real — convirtiendo cada partida en una batalla impredecible por sobrevivir, hecha para streamers.",
 };
 
-function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang,setLang,isOwner,t}:any) {
+// ─── SHARED NEON CHROME (nav / footer / product card) ─────────────────────────
+function ProductCard({p,i,lang,addToCart,L}:any){
+  return (
+    <article className="card reveal" data-accent={ACCENTS[i%ACCENTS.length]} id={"p"+p.id}>
+      <div className="card-media">
+        <span className="card-price">${p.price}</span>
+        {p.type==="digital"&&<span className="card-badge">Digital</span>}
+        {p.img?<img src={p.img} alt={p.name} loading="lazy"/>:<span className="card-emoji">{p.emoji}</span>}
+      </div>
+      <div className="card-body">
+        <h3 className="card-title">{p.name}</h3>
+        <p className="card-desc">{lang==="es" ? (PROD_DESC_ES[p.name]||p.desc) : p.desc}</p>
+        {p.stock<15&&<span className="stock-low">{L.onlyLeft} {p.stock} {L.left}</span>}
+        <div className="card-foot">
+          <button className="btn-add" onClick={()=>addToCart(p)}>{L.addToCart}</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function NeonNav({lang,setLang,cartCount,onCart,onHome,onProps,onGames,onFaq,solid}:any){
+  const [menuOpen,setMenuOpen]=useState(false);
+  return (
+    <header className={"nav"+(solid?" scrolled":"")}>
+      <button className="brand" onClick={onHome}>
+        <img src="/landing/logo.png" alt="Interactive Props" className="brand-logo"/>
+        <span className="brand-name">INTERACTIVE&nbsp;<span className="brand-name-2">PROPS</span></span>
+      </button>
+      <nav className="nav-links">
+        <a onClick={onProps}>Props</a>
+        <a onClick={onGames}>Games</a>
+        <a onClick={onFaq}>FAQ</a>
+      </nav>
+      <div className="nav-tools">
+        <div className="lang-toggle">
+          <button className={lang==="en"?"on":""} onClick={()=>setLang("en")}>EN</button>
+          <button className={lang==="es"?"on":""} onClick={()=>setLang("es")}>ES</button>
+        </div>
+        <button className="nav-icon" aria-label="Cart" onClick={onCart}>
+          🛒{cartCount>0&&<span className="cart-count">{cartCount}</span>}
+        </button>
+        <button className={"nav-burger"+(menuOpen?" is-open":"")} aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen((o:boolean)=>!o)}>
+          <span/><span/><span/>
+        </button>
+      </div>
+      <nav className="mobile-menu" hidden={!menuOpen}>
+        <a onClick={()=>{onProps();setMenuOpen(false);}}>Props</a>
+        <a onClick={()=>{onGames();setMenuOpen(false);}}>Games</a>
+        <a onClick={()=>{onFaq();setMenuOpen(false);}}>FAQ</a>
+      </nav>
+    </header>
+  );
+}
+
+function NeonFooter({L,products,onProductsLink,onHow,onFaq,onPolicy}:any){
+  return (
+    <footer className="footer">
+      <div className="wrap foot-grid">
+        <div className="foot-brand">
+          <img src="/landing/logo.png" alt="Interactive Props" className="foot-logo"/>
+          <p>{L.footBlurb}</p>
+        </div>
+        <div className="foot-col">
+          <h5>{L.footProducts}</h5>
+          {products.slice(0,4).map((p:any)=>(<a key={p.id} onClick={onProductsLink}>{p.name}</a>))}
+        </div>
+        <div className="foot-col">
+          <h5>{L.footCompany}</h5>
+          <a onClick={onHow}>{L.footHow}</a>
+          <a onClick={onFaq}>{L.footFaq}</a>
+          <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
+        </div>
+        <div className="foot-col">
+          <h5>{L.footSupport}</h5>
+          <a onClick={()=>onPolicy("shipping")}>{L.footShip}</a>
+          <a onClick={()=>onPolicy("returns")}>{L.footRet}</a>
+          <a onClick={()=>onPolicy("warranty")}>{L.footWar}</a>
+          <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
+        </div>
+      </div>
+      <div className="wrap foot-bottom">
+        <span className="foot-legal">Interactive Props is owned and operated by <b>Veronica Aime Rey, sole proprietor</b>.</span>
+        <span className="foot-mail">© <span>{new Date().getFullYear()}</span> · interactiveprops.official@gmail.com</span>
+      </div>
+    </footer>
+  );
+}
+
+// ─── LANDING (v4 neon single page) ─────────────────────────────────────────────
+function LandingView({products,lang,setLang,addToCart,cartCount,setCartOpen,goProducts,goFaq,goPolicy}:any) {
   const rootRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<any>(null);
-  const [cart,setCart] = useState<any[]>([]);
-  const [cartOpen,setCartOpen] = useState(false);
-  const [checkoutOpen,setCheckoutOpen] = useState(false);
-  const [toast,setToast] = useState<string|null>(null);
-  const [openFaq,setOpenFaq] = useState<number>(-1);
-  const [menuOpen,setMenuOpen] = useState(false);
-
-  const cartCount = cart.reduce((s:number,i:any)=>s+i.qty,0);
-  const cartTotal = cart.reduce((s:number,i:any)=>s+i.price*i.qty,0);
-  const showcase = products.filter((p:any)=>p.active!==false);
   const L = LT[lang] || LT.en;
-
-  function showToast(msg:string){ setToast(msg); setTimeout(()=>setToast(null),2400); }
-  function addToCart(p:any){
-    setCart(prev=>{ const ex=prev.find(i=>i.id===p.id); return ex?prev.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i):[...prev,{...p,qty:1}]; });
-    showToast(p.name+" added to cart");
-  }
-  function handleOrderComplete(orderData:any,shipping:any,signText:string,finalTotal:number){
-    const extraLetters=signText?Math.max(0,signText.replace(/ /g,"").length-8):0;
-    const extraCost=extraLetters*3;
-    const orderId="ORD-"+Date.now(), orderDate=new Date().toISOString();
-    addOrder({id:orderId,date:orderDate,items:cart,total:finalTotal,shipping,signText:signText||null,signExtraCost:extraCost>0?extraCost:null,paypal:orderData,status:"paid"});
-    fetch("https://hook.us2.make.com/mbkm6kji0gsdnebf7wnoa9wojox2yo9h",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"order.completed",order_id:orderId,date:orderDate,customer:{name:shipping.name,email:shipping.email,phone:shipping.phone||""},shipping:{address:shipping.address||"",city:shipping.city||"",state:shipping.state||"",zip:shipping.zip||"",country:shipping.country||"US"},items:cart.map((i:any)=>({id:i.id,name:i.name,price:i.price,quantity:i.qty,type:i.type})),sign_text:signText||null,sign_extra_cost:extraCost>0?extraCost:null,subtotal:cartTotal,total:finalTotal,payment_method:"PayPal"})}).catch(e=>console.log("Webhook:",e));
-    setCart([]); setCheckoutOpen(false); showToast("Order complete! Thank you.");
-  }
+  const featured = products.filter((p:any)=>p.category==="Props");
 
   // Smooth-scroll to an in-page section id
   function goTo(id:string){
@@ -954,36 +961,9 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
 
   return (
     <div className="ip-landing" ref={rootRef}>
-      {/* NAV */}
-      <header className="nav">
-        <button className="brand" onClick={()=>goTo("#top")}>
-          <img src="/landing/logo.png" alt="Interactive Props" className="brand-logo"/>
-          <span className="brand-name">INTERACTIVE&nbsp;<span className="brand-name-2">PROPS</span></span>
-        </button>
-        <nav className="nav-links">
-          <a onClick={()=>goTo("#products")}>{L.navProducts}</a>
-          <a onClick={()=>goTo("#how")}>{L.navHow}</a>
-          <a onClick={()=>goTo("#faq")}>{L.navFaq}</a>
-        </nav>
-        <div className="nav-tools">
-          <div className="lang-toggle">
-            <button className={lang==="en"?"on":""} onClick={()=>setLang("en")}>EN</button>
-            <button className={lang==="es"?"on":""} onClick={()=>setLang("es")}>ES</button>
-          </div>
-          <button className="nav-icon" aria-label="Cart" onClick={()=>setCartOpen(true)}>
-            🛒{cartCount>0&&<span className="cart-count">{cartCount}</span>}
-          </button>
-          <button className="nav-icon" aria-label={isOwner?"Admin":"Owner login"} onClick={()=>setView(isOwner?"admin":"login")}>{isOwner?"⚙️":"👤"}</button>
-          <button className={"nav-burger"+(menuOpen?" is-open":"")} aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen(o=>!o)}>
-            <span/><span/><span/>
-          </button>
-        </div>
-        <nav className="mobile-menu" hidden={!menuOpen}>
-          <a onClick={()=>{goTo("#products");setMenuOpen(false);}}>{L.navProducts}</a>
-          <a onClick={()=>{goTo("#how");setMenuOpen(false);}}>{L.navHow}</a>
-          <a onClick={()=>{goTo("#faq");setMenuOpen(false);}}>{L.navFaq}</a>
-        </nav>
-      </header>
+      {/* NAV (shared neon chrome) */}
+      <NeonNav lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={()=>goTo("#top")} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
 
       <span id="top"/>
 
@@ -1023,15 +1003,6 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </div>
 
-      {/* INTRO */}
-      <section className="intro" id="about">
-        <div className="wrap">
-          <p className="kicker reveal">{L.introKicker}</p>
-          <h2 className="intro-head reveal">{L.introHeadA}<br/><span className="grad">{L.introHeadB}</span></h2>
-          <p className="intro-sub reveal">{L.introSub}</p>
-        </div>
-      </section>
-
       {/* HOW IT WORKS */}
       <section className="how" id="how">
         <div className="wrap">
@@ -1055,32 +1026,21 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* PRODUCTS — wired to real cart */}
+      {/* FEATURED PRODUCTS — wired to shared cart */}
       <section className="products" id="products">
         <div className="wrap">
           <div className="sec-head reveal">
-            <p className="kicker">{L.prodKicker}</p>
-            <h2 className="sec-title">{L.prodTitleA}<span className="grad">{L.prodTitleMid}</span></h2>
+            <p className="kicker">{L.featuredKicker}</p>
+            <h2 className="sec-title">{L.featuredTitleA}<span className="grad">{L.featuredTitleWord}</span></h2>
             <p className="sec-desc">{L.prodDesc}</p>
           </div>
           <div className="grid">
-            {showcase.map((p:any,i:number)=>(
-              <article className="card reveal" data-accent={ACCENTS[i%ACCENTS.length]} id={"p"+p.id} key={p.id}>
-                <div className="card-media">
-                  <span className="card-price">${p.price}</span>
-                  {p.type==="digital"&&<span className="card-badge">Digital</span>}
-                  {p.img?<img src={p.img} alt={p.name} loading="lazy"/>:<span className="card-emoji">{p.emoji}</span>}
-                </div>
-                <div className="card-body">
-                  <h3 className="card-title">{p.name}</h3>
-                  <p className="card-desc">{lang==="es" ? (PROD_DESC_ES[p.name]||p.desc) : p.desc}</p>
-                  {p.stock<15&&<span className="stock-low">{L.onlyLeft} {p.stock} {L.left}</span>}
-                  <div className="card-foot">
-                    <button className="btn-add" onClick={()=>addToCart(p)}>{L.addToCart}</button>
-                  </div>
-                </div>
-              </article>
+            {featured.map((p:any,i:number)=>(
+              <ProductCard key={p.id} p={p} i={i} lang={lang} addToCart={addToCart} L={L}/>
             ))}
+          </div>
+          <div className="view-all reveal">
+            <button className="btn btn-ghost" onClick={()=>goProducts("props")}>{L.viewAll} <span className="arw">→</span></button>
           </div>
         </div>
       </section>
@@ -1111,35 +1071,6 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="faq" id="faq">
-        <div className="wrap faq-wrap">
-          <div className="sec-head reveal">
-            <p className="kicker">{L.faqKicker}</p>
-            <h2 className="sec-title">{L.faqTitleA}<span className="grad">{L.faqTitleMid}</span></h2>
-          </div>
-          <div className="faq-list">
-            {L.faq.map((item:any,i:number)=>(
-              <details className="qa reveal" key={i} open={openFaq===i}>
-                <summary onClick={(e)=>{e.preventDefault();setOpenFaq(openFaq===i?-1:i);}}>{item.q}<i/></summary>
-                <p>{item.a}</p>
-              </details>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* POLICIES */}
-      <section className="policies">
-        <div className="wrap">
-          <div className="pol-grid">
-            <div className="pol reveal" onClick={()=>{setView("shipping");window.scrollTo(0,0);}}><h4>{L.polShipTitle}</h4><p>{L.polShip}</p></div>
-            <div className="pol reveal" onClick={()=>{setView("returns");window.scrollTo(0,0);}}><h4>{L.polRetTitle}</h4><p>{L.polRet}</p></div>
-            <div className="pol reveal" onClick={()=>{setView("warranty");window.scrollTo(0,0);}}><h4>{L.polWarTitle}</h4><p>{L.polWar}</p></div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA BANNER */}
       <section className="cta" id="contact">
         <div className="cta-media"><img src="/landing/banner.jpg" alt="" aria-hidden="true"/></div>
@@ -1155,38 +1086,171 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <div className="wrap foot-grid">
-          <div className="foot-brand">
-            <img src="/landing/logo.png" alt="Interactive Props" className="foot-logo"/>
-            <p>{L.footBlurb}</p>
-          </div>
-          <div className="foot-col">
-            <h5>{L.footProducts}</h5>
-            {showcase.slice(0,4).map((p:any)=>(<a key={p.id} onClick={()=>goTo("#p"+p.id)}>{p.name}</a>))}
-          </div>
-          <div className="foot-col">
-            <h5>{L.footCompany}</h5>
-            <a onClick={()=>goTo("#about")}>{L.footAbout}</a>
-            <a onClick={()=>goTo("#how")}>{L.footHow}</a>
-            <a onClick={()=>goTo("#faq")}>{L.footFaq}</a>
-          </div>
-          <div className="foot-col">
-            <h5>{L.footSupport}</h5>
-            <a onClick={()=>{setView("shipping");window.scrollTo(0,0);}}>{L.footShip}</a>
-            <a onClick={()=>{setView("returns");window.scrollTo(0,0);}}>{L.footRet}</a>
-            <a onClick={()=>{setView("warranty");window.scrollTo(0,0);}}>{L.footWar}</a>
-            <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
-          </div>
-        </div>
-        <div className="wrap foot-bottom">
-          <span className="foot-legal">Interactive Props is owned and operated by <b>Veronica Aime Rey, sole proprietor</b>.</span>
-          <span className="foot-mail">© <span>{new Date().getFullYear()}</span> · interactiveprops.official@gmail.com</span>
-        </div>
-      </footer>
+      {/* FOOTER (shared neon chrome) */}
+      <NeonFooter L={L} products={featured} onProductsLink={()=>goProducts("props")}
+        onHow={()=>goTo("#how")} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
 
-      {/* CART DRAWER */}
+// ─── PRODUCTS PAGE (neon, Props / Games tabs) ─────────────────────────────────
+function ProductsPage({products,lang,setLang,addToCart,cartCount,setCartOpen,tab,setTab,goHome,goProducts,goFaq,goPolicy}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const L = LT[lang] || LT.en;
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    const root=rootRef.current; if(!root) return;
+    const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }),{threshold:0.12,rootMargin:"0px 0px -6% 0px"});
+    root.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+    return ()=>io.disconnect();
+  },[tab]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>setTab("props")} onGames={()=>setTab("games")} onFaq={goFaq}/>
+
+      <section className="page-head">
+        <div className="wrap">
+          <p className="page-eyebrow">{L.prodPageEyebrow}</p>
+          <h1 className="page-title">{L.prodPageTitleA}<span className="grad-word">{L.prodPageTitleWord}</span></h1>
+          <p className="page-sub">{L.prodPageSub}</p>
+          <div className="cat-tabs" role="tablist">
+            <button className={"cat-tab"+(tab==="props"?" is-active":"")} role="tab" aria-selected={tab==="props"} onClick={()=>setTab("props")}>Props</button>
+            <button className={"cat-tab"+(tab==="games"?" is-active":"")} role="tab" aria-selected={tab==="games"} onClick={()=>setTab("games")}>Games</button>
+          </div>
+        </div>
+      </section>
+
+      <section className="products page-products">
+        <div className="wrap">
+          {tab==="props"
+            ?<div className="grid">
+               {props.map((p:any,i:number)=>(
+                 <ProductCard key={p.id} p={p} i={i} lang={lang} addToCart={addToCart} L={L}/>
+               ))}
+             </div>
+            :<div className="empty-cat reveal">
+               <div className="empty-badge">⚡</div>
+               <h3>{L.gamesSoonTitle}</h3>
+               <p>{L.gamesSoonBody} <a href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a>.</p>
+             </div>
+          }
+        </div>
+      </section>
+
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
+// ─── FAQ PAGE (neon accordion) ────────────────────────────────────────────────
+function FaqPage({products,lang,setLang,cartCount,setCartOpen,goHome,goProducts,goFaq,goPolicy}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [openFaq,setOpenFaq] = useState<number>(-1);
+  const L = LT[lang] || LT.en;
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    const root=rootRef.current; if(!root) return;
+    const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }),{threshold:0.12,rootMargin:"0px 0px -6% 0px"});
+    root.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+    return ()=>io.disconnect();
+  },[]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
+
+      <section className="faq page-faq" id="faq">
+        <div className="wrap">
+          <div className="sec-head center reveal">
+            <p className="kicker">{L.faqKicker}</p>
+            <h2 className="sec-title">{L.faqTitleA}<span className="grad">{L.faqTitleMid}</span></h2>
+          </div>
+          <div className="faq-list faq-page-list">
+            {L.faq.map((item:any,i:number)=>(
+              <details className="qa reveal" key={i} open={openFaq===i}>
+                <summary onClick={(e)=>{e.preventDefault();setOpenFaq(openFaq===i?-1:i);}}>{item.q}<i/></summary>
+                <p>{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [view,setView]=useState("shop");
+  const [products,setProducts]=useState(DEFAULT_PRODUCTS as any[]);
+  const [orders,setOrders]=useState<any[]>([]);
+  const [isOwner,setIsOwner]=useState(false);
+  const [lang,setLang]=useState<"en"|"es">("en");
+  const [productsTab,setProductsTab]=useState<"props"|"games">("props");
+  // ── Cart state lifted to App root so it is shared across every view ──
+  const [cart,setCart]=useState<any[]>([]);
+  const [cartOpen,setCartOpen]=useState(false);
+  const [checkoutOpen,setCheckoutOpen]=useState(false);
+  const [toast,setToast]=useState<string|null>(null);
+  const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
+  const t=TR[lang];
+  useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
+  useEffect(()=>{fsListen("orders",setOrders);},[]);
+  const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
+  const addOrder=useCallback(async(o:any)=>{await saveOrder(o);setOrders(prev=>[o,...prev]);},[]);
+
+  const cartCount=cart.reduce((s:number,i:any)=>s+i.qty,0);
+  const cartTotal=cart.reduce((s:number,i:any)=>s+i.price*i.qty,0);
+  function showToast(msg:string){ setToast(msg); setTimeout(()=>setToast(null),2400); }
+  function addToCart(p:any){
+    setCart(prev=>{ const ex=prev.find(i=>i.id===p.id); return ex?prev.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i):[...prev,{...p,qty:1}]; });
+    showToast(p.name+" added to cart");
+  }
+  function handleOrderComplete(orderData:any,shipping:any,signText:string,finalTotal:number){
+    const extraLetters=signText?Math.max(0,signText.replace(/ /g,"").length-8):0;
+    const extraCost=extraLetters*3;
+    const orderId="ORD-"+Date.now(), orderDate=new Date().toISOString();
+    addOrder({id:orderId,date:orderDate,items:cart,total:finalTotal,shipping,signText:signText||null,signExtraCost:extraCost>0?extraCost:null,paypal:orderData,status:"paid"});
+    fetch("https://hook.us2.make.com/mbkm6kji0gsdnebf7wnoa9wojox2yo9h",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"order.completed",order_id:orderId,date:orderDate,customer:{name:shipping.name,email:shipping.email,phone:shipping.phone||""},shipping:{address:shipping.address||"",city:shipping.city||"",state:shipping.state||"",zip:shipping.zip||"",country:shipping.country||"US"},items:cart.map((i:any)=>({id:i.id,name:i.name,price:i.price,quantity:i.qty,type:i.type})),sign_text:signText||null,sign_extra_cost:extraCost>0?extraCost:null,subtotal:cartTotal,total:finalTotal,payment_method:"PayPal"})}).catch(e=>console.log("Webhook:",e));
+    setCart([]); setCheckoutOpen(false); showToast("Order complete! Thank you.");
+  }
+
+  const goHome=()=>{ setView("shop"); window.scrollTo(0,0); };
+  const goProducts=(tab:"props"|"games")=>{ setProductsTab(tab); setView("products"); window.scrollTo(0,0); };
+  const goFaq=()=>{ setView("faq"); window.scrollTo(0,0); };
+  const goPolicy=(type:string)=>{ setView(type); window.scrollTo(0,0); };
+
+  const activeProducts=products.filter((p:any)=>p.active);
+  const legacyChrome=!["shop","products","faq"].includes(view);
+
+  return (
+    <div style={{minHeight:"100vh",width:"100%",background:BG,color:T1,fontFamily:"'Rajdhani',sans-serif"}}>
+      <style>{CSS}</style>
+      <div className="scanlines"/>
+      {legacyChrome&&<Header view={view} setView={setView} isOwner={isOwner} setIsOwner={setIsOwner} lang={lang} setLang={setLang} t={t}/>}
+      <div key={view}>
+          {view==="shop"    &&<LandingView products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="products"&&<ProductsPage products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} tab={productsTab} setTab={setProductsTab} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="faq"     &&<FaqPage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="about"   &&<AboutView setView={setView} t={t}/>}
+          {view==="contact" &&<ContactView setView={setView} t={t}/>}
+          {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
+          {view==="warranty"&&<PolicyView type="warranty" setView={setView} t={t}/>}
+          {view==="shipping"&&<PolicyView type="shipping" setView={setView} t={t}/>}
+          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} ownerPassword={OWNER_PASSWORD} t={t}/>}
+          {view==="admin"&&isOwner&&<AdminView products={products} orders={orders} persistProducts={persistProducts}/>}
+      </div>
+
+      {/* CART DRAWER — shared across every view */}
       <AnimatePresence>
         {cartOpen&&(
           <motion.div className="ip-cart-overlay" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} onClick={()=>setCartOpen(false)}>
@@ -1220,45 +1284,10 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         )}
       </AnimatePresence>
 
-      {checkoutOpen&&<CheckoutModal cart={cart} cartTotal={cartTotal} paypalLoaded={paypalLoaded} paypalClientId={paypalClientId} onClose={()=>setCheckoutOpen(false)} onComplete={handleOrderComplete} t={t}/>}
+      {checkoutOpen&&<CheckoutModal cart={cart} cartTotal={cartTotal} paypalLoaded={paypalLoaded} paypalClientId={PAYPAL_CLIENT_ID} onClose={()=>setCheckoutOpen(false)} onComplete={handleOrderComplete} t={t}/>}
 
       <AnimatePresence>
         {toast&&<motion.div className="ip-toast" initial={{opacity:0,y:16,x:"-50%"}} animate={{opacity:1,y:0,x:"-50%"}} exit={{opacity:0,y:12,x:"-50%"}} transition={{duration:0.25}}>{toast}</motion.div>}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── APP ROOT ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [view,setView]=useState("shop");
-  const [products,setProducts]=useState(DEFAULT_PRODUCTS as any[]);
-  const [orders,setOrders]=useState<any[]>([]);
-  const [isOwner,setIsOwner]=useState(false);
-  const [lang,setLang]=useState<"en"|"es">("en");
-  const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
-  const t=TR[lang];
-  useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
-  useEffect(()=>{fsListen("orders",setOrders);},[]);
-  const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
-  const addOrder=useCallback(async(o:any)=>{await saveOrder(o);setOrders(prev=>[o,...prev]);},[]);
-  return (
-    <div style={{minHeight:"100vh",width:"100%",background:BG,color:T1,fontFamily:"'Rajdhani',sans-serif"}}>
-      <style>{CSS}</style>
-      <div className="scanlines"/>
-      {view!=="shop"&&<Header view={view} setView={setView} isOwner={isOwner} setIsOwner={setIsOwner} lang={lang} setLang={setLang} t={t}/>}
-      <AnimatePresence mode="wait">
-        <motion.div key={view} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.22}}>
-          {view==="shop"    &&<LandingView products={products.filter((p:any)=>p.active)} paypalLoaded={paypalLoaded} paypalClientId={PAYPAL_CLIENT_ID} addOrder={addOrder} setView={setView} lang={lang} setLang={setLang} isOwner={isOwner} t={t}/>}
-          {view==="about"   &&<AboutView setView={setView} t={t}/>}
-          {view==="contact" &&<ContactView setView={setView} t={t}/>}
-          {view==="faq"     &&<FAQView setView={setView} t={t}/>}
-          {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
-          {view==="warranty"&&<PolicyView type="warranty" setView={setView} t={t}/>}
-          {view==="shipping"&&<PolicyView type="shipping" setView={setView} t={t}/>}
-          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} ownerPassword={OWNER_PASSWORD} t={t}/>}
-          {view==="admin"&&isOwner&&<AdminView products={products} orders={orders} persistProducts={persistProducts}/>}
-        </motion.div>
       </AnimatePresence>
     </div>
   );
