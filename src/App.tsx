@@ -1391,6 +1391,39 @@ function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHo
   );
 }
 
+// ─── RUTAS ────────────────────────────────────────────────────────────────────
+// Una direccion por pantalla. Sin esto la barra del navegador se queda en "/"
+// pase lo que pase: no se puede compartir un enlace ni funciona el boton atras.
+function rutaDeVista(view:string, tab:string){
+  switch(view){
+    case "products": return tab==="games" ? "/games" : "/props";
+    case "faq":      return "/faq";
+    case "juego":    return "/comprar-donut-bridge";
+    case "login":
+    case "admin":    return "/admin";
+    case "about":    return "/about";
+    case "contact":  return "/contact";
+    case "shipping": return "/shipping";
+    case "returns":  return "/returns";
+    case "warranty": return "/warranty";
+    default:         return "/";
+  }
+}
+function vistaDeRuta(pathname:string, hash:string):{view:string,tab?:string}{
+  const p = pathname.replace(/\/+$/,"").toLowerCase() || "/";
+  if(p==="/props")                              return {view:"products", tab:"props"};
+  if(p==="/games")                              return {view:"products", tab:"games"};
+  if(p==="/faq")                                return {view:"faq"};
+  if(p==="/comprar-donut-bridge")               return {view:"juego"};
+  if(p==="/admin"||hash.toLowerCase()==="#admin") return {view:"login"};
+  if(p==="/about")                              return {view:"about"};
+  if(p==="/contact")                            return {view:"contact"};
+  if(p==="/shipping")                           return {view:"shipping"};
+  if(p==="/returns")                            return {view:"returns"};
+  if(p==="/warranty")                           return {view:"warranty"};
+  return {view:"shop"};
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [view,setView]=useState("shop");
@@ -1406,14 +1439,28 @@ export default function App() {
   const [toast,setToast]=useState<string|null>(null);
   const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
   const t=TR[lang];
-  // The admin panel has NO entry point in the UI — it is reachable only by
-  // visiting /admin (or #admin), which lands on the password screen.
+  // ── Rutas ──────────────────────────────────────────────────────────────────
+  // Cada vista tiene su propia direccion, para que se pueda compartir un enlace,
+  // recargar sin perderse y que el boton "atras" del navegador funcione.
+  // (El admin no tiene enlace en la web: solo se llega escribiendo /admin.)
   useEffect(()=>{
-    const path=window.location.pathname.replace(/\/+$/,"").toLowerCase();
-    if(path==="/admin"||window.location.hash.toLowerCase()==="#admin") setView("login");
-    // api/juego.js manda aqui a quien intenta abrir el juego sin licencia
-    else if(path==="/comprar-donut-bridge") setView("juego");
+    const aplicar=()=>{
+      const { view:v, tab } = vistaDeRuta(window.location.pathname, window.location.hash);
+      setView(v);
+      if(tab) setProductsTab(tab as "props"|"games");
+    };
+    aplicar();
+    window.addEventListener("popstate", aplicar);
+    return ()=>window.removeEventListener("popstate", aplicar);
   },[]);
+
+  // Al cambiar de vista, actualiza la barra de direcciones.
+  useEffect(()=>{
+    const destino = rutaDeVista(view, productsTab);
+    if(window.location.pathname !== destino){
+      try{ window.history.pushState({}, "", destino); }catch(e){ /* noop */ }
+    }
+  },[view, productsTab]);
   // Session comes from Firebase Auth, so a refresh keeps the owner signed in.
   useEffect(()=>{ onAdminAuth((u:any)=>setIsOwner(!!u)); },[]);
   useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
