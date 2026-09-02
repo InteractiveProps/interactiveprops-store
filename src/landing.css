@@ -538,3 +538,6 @@ html.lenis, html.lenis body{ height:auto; }
   border:1px solid rgba(43,212,255,.5); backdrop-filter:blur(6px);
   box-shadow:0 4px 14px rgba(0,0,0,.45);
 }
+.ip-landing .juego-aviso{ border:1px solid rgba(255,138,61,.5); background:rgba(255,138,61,.10); border-radius:12px; padding:16px 18px; }
+.ip-landing .juego-aviso strong{ display:block; color:var(--orange); font-family:var(--disp); margin-bottom:8px; }
+.ip-landing .juego-aviso p{ color:var(--ink-soft); font-size:.9rem; line-height:1.6; }

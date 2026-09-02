@@ -778,6 +778,8 @@ const LT:Record<string,any> = {
     juego:{
       eyebrow:"INTERACTIVE GAMES",
       badge:"Digital game",verJuego:"View game",
+      desajusteTitulo:"Payments are not safe to run yet",
+      desajusteBody:"The server is in sandbox mode but the browser is set up for live PayPal. Buttons are hidden on purpose: paying here would charge real money and still not create a licence. Set VITE_PAYPAL_CLIENT_ID (sandbox) for this environment and redeploy.",
       desc:"A fast-paced donut-hopping run. Buy once, play forever — on any device, from your own private link.",
       bullets:["One-time payment, no subscription","Plays in your browser — nothing to install","Works on desktop and mobile","Your link never expires"],
       pagoUnico:"one-time payment",
@@ -860,6 +862,8 @@ const LT:Record<string,any> = {
     juego:{
       eyebrow:"JUEGOS INTERACTIVOS",
       badge:"Juego digital",verJuego:"Ver juego",
+      desajusteTitulo:"Todavia no es seguro cobrar aqui",
+      desajusteBody:"El servidor esta en modo sandbox pero el navegador esta configurado con PayPal de produccion. Ocultamos los botones a proposito: pagar aqui cobraria dinero REAL y aun asi no se emitiria la licencia. Pon VITE_PAYPAL_CLIENT_ID (sandbox) en este entorno y vuelve a desplegar.",
       desc:"Un runner trepidante saltando de dona en dona. Lo compras una vez y lo juegas para siempre — en cualquier dispositivo, desde tu enlace privado.",
       bullets:["Pago único, sin suscripción","Se juega en el navegador — no hay que instalar nada","Funciona en computadora y en móvil","Tu enlace no caduca nunca"],
       pagoUnico:"pago único",
@@ -1289,12 +1293,28 @@ function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHo
   const [enlace,setEnlace] = useState<string|null>(null);
   const [error,setError] = useState<string|null>(null);
   const [procesando,setProcesando] = useState(false);
+  const [entornoServidor,setEntornoServidor] = useState<string|null>(null);
   const L = LT[lang] || LT.en;
   const G = L.juego;
+
+  // ── Cinturón de seguridad ──────────────────────────────────────────────────
+  // El navegador usa VITE_PAYPAL_CLIENT_ID; el servidor usa PAYPAL_ENTORNO. Si
+  // no coinciden (p. ej. la variable del navegador quedo sin poner y cae al
+  // client-id de produccion mientras el servidor esta en sandbox), un pago de
+  // "prueba" cobraria dinero REAL y ademas la licencia nunca se emitiria.
+  // Preguntamos el entorno al servidor y, si hay desajuste, NO pintamos botones.
+  const clientIdDelEntorno = !!import.meta.env.VITE_PAYPAL_CLIENT_ID;
+  const desajustePayPal = entornoServidor === "sandbox" && !clientIdDelEntorno;
+
+  useEffect(()=>{
+    fetch("/api/comprar").then(r=>r.json())
+      .then(j=>setEntornoServidor(j?.entorno||"desconocido"))
+      .catch(()=>setEntornoServidor("desconocido"));
+  },[]);
   const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
 
   useEffect(()=>{
-    if(!paypalLoaded || enlace) return;
+    if(!paypalLoaded || enlace || desajustePayPal || !entornoServidor) return;
     const cont=document.getElementById("paypal-juego-container");
     if(!cont || cont.childNodes.length>0) return;
     (window as any).paypal.Buttons({
@@ -1313,7 +1333,7 @@ function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHo
       onError:()=>setError(G.errorPago),
       style:{layout:"vertical",color:"black",shape:"rect",label:"pay"}
     }).render("#paypal-juego-container");
-  },[paypalLoaded,enlace]);
+  },[paypalLoaded,enlace,desajustePayPal,entornoServidor]);
 
   return (
     <div className="ip-landing" ref={rootRef}>
@@ -1345,11 +1365,20 @@ function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHo
             ) : (
               <div className="juego-compra">
                 <div className="juego-precio"><span>${JUEGO_PRECIO}</span><small>{G.pagoUnico}</small></div>
-                {procesando && <p className="juego-fine">{G.procesando}</p>}
-                {error && <p className="juego-error">{error}</p>}
-                <div id="paypal-juego-container"/>
-                {!paypalLoaded && <p className="juego-fine">{G.cargando}</p>}
-                <p className="juego-fine">{G.acceso}</p>
+                {desajustePayPal ? (
+                  <div className="juego-aviso">
+                    <strong>⚠️ {G.desajusteTitulo}</strong>
+                    <p>{G.desajusteBody}</p>
+                  </div>
+                ) : (
+                  <>
+                    {procesando && <p className="juego-fine">{G.procesando}</p>}
+                    {error && <p className="juego-error">{error}</p>}
+                    <div id="paypal-juego-container"/>
+                    {(!paypalLoaded || !entornoServidor) && <p className="juego-fine">{G.cargando}</p>}
+                    <p className="juego-fine">{G.acceso}</p>
+                  </>
+                )}
               </div>
             )}
           </div>

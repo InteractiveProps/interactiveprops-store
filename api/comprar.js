@@ -93,6 +93,15 @@ async function db() {
 // ------------------------------------------------------------------ la función
 
 export default async function handler(req, res) {
+  // GET = "¿en qué entorno estás?". La página de compra lo pregunta ANTES de
+  // pintar los botones, para no dejar que el navegador cobre en producción
+  // mientras el servidor está en sandbox (o al revés). Sin esto, una variable
+  // mal puesta puede cobrar dinero de verdad en una prueba.
+  if (req.method === 'GET') {
+    res.status(200).json({ entorno: ENTORNO });
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Solo POST' });
     return;
