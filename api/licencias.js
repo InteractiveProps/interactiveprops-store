@@ -39,17 +39,21 @@ async function db() {
 }
 
 // Solo pasa quien trae un token de sesión válido de Firebase Auth.
+// Devuelve el motivo del rechazo: sin él, un fallo de configuración se ve igual
+// que un intento de intrusión y no hay forma de saber qué arreglar.
 async function esAdmin(req) {
   const cabecera = req.headers.authorization || '';
   const idToken = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : null;
-  if (!idToken) return false;
+  if (!idToken) return { ok: false, motivo: 'sin-token' };
   try {
     await iniciaApp();
     const { getAuth } = await import('firebase-admin/auth');
-    await getAuth().verifyIdToken(idToken);
-    return true;
+    const datos = await getAuth().verifyIdToken(idToken);
+    return { ok: true, uid: datos.uid };
   } catch (e) {
-    return false;
+    const motivo = e?.errorInfo?.code || e?.code || e?.message || 'verificacion-fallida';
+    console.error('licencias: verifyIdToken falló →', motivo);
+    return { ok: false, motivo: String(motivo).slice(0, 120) };
   }
 }
 
@@ -62,8 +66,12 @@ function enlaceDe(token, req) {
 
 // ------------------------------------------------------------------ la función
 export default async function handler(req, res) {
-  if (!(await esAdmin(req))) {
-    res.status(401).json({ error: 'Necesitas iniciar sesión como administrador' });
+  const sesion = await esAdmin(req);
+  if (!sesion.ok) {
+    res.status(401).json({
+      error: 'Necesitas iniciar sesión como administrador',
+      motivo: sesion.motivo
+    });
     return;
   }
 
