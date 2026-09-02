@@ -1581,7 +1581,12 @@ export default function App() {
     }
   },[view, productsTab]);
   // Session comes from Firebase Auth, so a refresh keeps the owner signed in.
-  useEffect(()=>{ onAdminAuth((u:any)=>setIsOwner(!!u)); },[]);
+  // Si la sesión sigue viva, /admin entra directo al panel en vez de volver a
+  // pedir la contraseña.
+  useEffect(()=>{ onAdminAuth((u:any)=>{
+    setIsOwner(!!u);
+    if(u) setView(v => v==="login" ? "admin" : v);
+  }); },[]);
   useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
   useEffect(()=>{fsListen("orders",setOrders);},[]);
   const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
