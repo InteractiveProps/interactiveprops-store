@@ -1,0 +1,444 @@
+<meta charset="utf-8">
+<base href="/juego/">
+<title>Donut Bridge</title>
+
+<link rel="icon" type="image/png" sizes="32x32" href="assets/icon32.png?v=1373b8a8">>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Chivo+Mono:wght@400;600&display=swap">
+<style>
+  :root{
+    --glaze:#ff2d8e;
+    --glaze-deep:#c4106a;
+    --dough:#f0932b;
+    --player:#2bd9e8;
+    --sky-top:#bfe4f7;
+    --sky-low:#f6e7d2;
+    --ink:#12161d;
+    --ink-soft:#1c222c;
+    --cream:#fff6ea;
+    --stone:#98a1ab;
+    --shadow:0 10px 0 rgba(18,22,29,.28);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    background:var(--ink);
+    font-family:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+    color:var(--cream);
+    overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #stage{position:fixed;left:0;top:0;width:100%;height:100%;touch-action:none;display:block}
+  #ui{position:fixed;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}
+
+  .hudbar{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:14px 14px 0;flex-wrap:wrap}
+  .chip{
+    display:flex;align-items:center;gap:9px;
+    background:rgba(18,22,29,.72);
+    border:2px solid rgba(255,246,234,.14);
+    border-bottom-width:4px;
+    border-radius:999px;
+    padding:7px 15px 5px;
+    backdrop-filter:blur(6px);
+  }
+  .chip .label{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:rgba(255,246,234,.55);font-weight:700;line-height:1;
+  }
+  .chip .label b{color:#ff7bb8;font-weight:800}
+  .lvlname{
+    font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    color:rgba(255,246,234,.4);font-weight:700;
+  }
+  .chip .value{
+    font-family:"Chivo Mono","SFMono-Regular",monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:19px;font-weight:600;line-height:1;color:var(--cream);
+    display:inline-block;transform-origin:left center;
+  }
+  .chip .value.pop{animation:pop .24s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes pop{
+    0%{transform:scale(1)}
+    45%{transform:scale(1.42);color:#fff}
+    100%{transform:scale(1)}
+  }
+  .chip.pink .value{color:#ff7bb8}
+  .stackcol{display:flex;flex-direction:column;gap:1px}
+
+  /* progreso del puente: 10 muescas, una por tablón */
+  #planks{display:flex;gap:var(--ng,3px);align-items:center}
+  #planks i{
+    width:var(--nw,7px);height:16px;border-radius:2px;
+    background:rgba(255,246,234,.16);
+    transition:background .18s ease, transform .18s ease;
+  }
+  #planks i.on{background:var(--glaze);transform:scaleY(1.28)}
+  #planks i.just{animation:notch .34s ease}
+  @keyframes notch{
+    0%{transform:scaleY(1.28)}
+    40%{transform:scaleY(2.05) scaleX(1.6);background:var(--cream)}
+    100%{transform:scaleY(1.28)}
+  }
+
+  .footer{padding:0 10px 14px;display:flex;flex-direction:column;align-items:center;gap:9px}
+
+  /* botón de pausa del HUD: mismo chip, sin texto */
+  .iconbtn{
+    pointer-events:auto;cursor:pointer;font:inherit;
+    color:rgba(255,246,234,.7);padding:9px 12px 7px;
+    transition:color .15s ease,border-color .15s ease,transform .07s ease;
+  }
+  .iconbtn:hover{color:var(--cream);border-color:rgba(255,45,142,.5)}
+  .iconbtn:active{transform:translateY(2px)}
+  .iconbtn:focus-visible{outline:3px solid var(--player);outline-offset:2px}
+
+  /* pestañas del menú principal */
+  .tabs{
+    display:flex;gap:5px;margin:0 0 16px;padding:4px;
+    background:rgba(255,246,234,.06);border-radius:15px;
+  }
+  .tab{
+    pointer-events:auto;cursor:pointer;font:inherit;font-weight:700;font-size:14px;
+    flex:1;color:rgba(255,246,234,.6);background:transparent;border:0;
+    border-radius:11px;padding:9px 10px 7px;
+    transition:background .15s ease,color .15s ease;
+  }
+  .tab:hover{color:var(--cream)}
+  .tab.on{background:var(--glaze);color:#2a0716}
+  .tab:focus-visible{outline:3px solid var(--player);outline-offset:2px}
+  [role="tabpanel"][hidden]{display:none}
+
+  /* tabla de controles del menú */
+  .keylist{list-style:none;margin:0 0 20px;padding:0;display:grid;gap:8px;text-align:left}
+  .keylist li{
+    display:grid;grid-template-columns:104px 1fr;gap:12px;align-items:center;
+    font-size:15px;color:rgba(255,246,234,.82);line-height:1.3;
+  }
+  .keylist .keys{display:flex;gap:4px;flex-wrap:wrap}
+  .keylist kbd{
+    font-family:"Chivo Mono",monospace;font-size:11px;font-weight:600;line-height:1;
+    background:rgba(255,246,234,.1);border:1px solid rgba(255,246,234,.22);
+    border-radius:6px;padding:5px 7px 4px;color:rgba(255,246,234,.7);
+  }
+  .keylist li[data-tone="add"] kbd{color:#9fe8a0;border-color:rgba(159,232,160,.4)}
+  .keylist li[data-tone="sub"] kbd{color:#ffcf7b;border-color:rgba(255,207,123,.4)}
+  .keylist li[data-tone="wipe"] kbd{color:#ff8fb4;border-color:rgba(255,143,180,.45)}
+  .keylist li[data-tone="bridge"] kbd{color:#8fd8ff;border-color:rgba(143,216,255,.45)}
+  .keylist li[data-tone="magnet"] kbd{color:#8fd8ff;border-color:rgba(143,216,255,.45)}
+  .keylist li[data-tone="dance"] kbd{color:#ff8fb4;border-color:rgba(255,143,180,.45)}
+  .hint{
+    font-size:13px;color:rgba(255,246,234,.62);
+    background:rgba(18,22,29,.55);padding:6px 16px 4px;border-radius:999px;
+    backdrop-filter:blur(6px);
+  }
+
+  .overlay{
+    position:fixed;inset:0;display:grid;place-items:center;padding:22px;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(18,22,29,.55), rgba(18,22,29,.9));
+    pointer-events:auto;z-index:5;
+  }
+  .overlay[hidden]{display:none}
+  /* pantalla de carga: la portada mientras se decodifica el modelo 3D */
+  .splash{
+    background:var(--ink);
+    background-image:var(--cover);
+    background-size:contain;background-repeat:no-repeat;background-position:center;
+    z-index:60;transition:opacity .42s ease;align-content:end
+  }
+  .splash.out{opacity:0;pointer-events:none}
+  .splashload{
+    font:700 12px/1 'Chivo Mono',ui-monospace,monospace;letter-spacing:.24em;
+    text-transform:uppercase;color:rgba(255,246,234,.72);margin:0;
+    background:rgba(18,22,29,.72);padding:9px 16px;border-radius:999px
+  }
+  .card{
+    width:min(460px,100%);
+    background:var(--ink-soft);
+    border:2px solid rgba(255,246,234,.12);
+    border-bottom:7px solid var(--glaze-deep);
+    border-radius:26px;
+    padding:26px 26px 22px;
+    text-align:center;
+    box-shadow:0 26px 60px rgba(0,0,0,.5);
+  }
+  .eyebrow{
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:#ff7bb8;font-weight:700;margin:0 0 6px;
+  }
+  h1{
+    font-size:clamp(34px,9vw,50px);line-height:.95;margin:0 0 12px;
+    font-weight:800;text-wrap:balance;
+    color:var(--cream);
+  }
+  h1 em{font-style:normal;color:var(--glaze);display:block}
+  .card p{margin:0 0 16px;font-size:16px;line-height:1.45;color:rgba(255,246,234,.78)}
+  /* el nombre del juego sobre el título de la pantalla de victoria */
+  /* el logo: grande en el menú, pequeño sobre el título de la victoria */
+  .card .logo{margin:0 0 14px}
+  .card .logo img{display:block;width:100%;max-width:340px;margin:0 auto;height:auto}
+  .card .gamename{margin:0 0 10px}
+  .card .gamename img{display:block;width:100%;max-width:158px;margin:0 auto;height:auto}
+  .steps{
+    list-style:none;margin:0 0 20px;padding:0;
+    display:grid;gap:9px;text-align:left;
+  }
+  .steps li{
+    display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:baseline;
+    font-size:15px;color:rgba(255,246,234,.82);line-height:1.35;
+  }
+  .steps b{
+    font-family:"Chivo Mono",monospace;font-size:12px;font-weight:600;
+    color:var(--glaze);
+    border:1.5px solid rgba(255,45,142,.45);border-radius:7px;
+    text-align:center;padding:2px 0;
+  }
+  .btn{
+    pointer-events:auto;cursor:pointer;font:inherit;font-weight:800;
+    font-size:19px;letter-spacing:.02em;
+    color:#2a0716;background:var(--glaze);
+    border:0;border-bottom:5px solid var(--glaze-deep);
+    border-radius:16px;padding:13px 34px 11px;width:100%;
+    transition:transform .08s ease,filter .15s ease;
+  }
+  .langpick{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+  .langpick button{
+    font:600 12px/1 'Chivo Mono',ui-monospace,monospace;letter-spacing:.08em;
+    color:#9aa6b6;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
+    border-radius:8px;padding:5px 12px;cursor:pointer
+  }
+  .langpick button:hover{color:#e8eef7}
+  .langpick button.on{color:#12161d;background:var(--glaze);border-color:var(--glaze)}
+  .langpick button:focus-visible{outline:3px solid var(--player);outline-offset:2px}
+  .btn:hover{filter:brightness(1.07)}
+  .btn:active{transform:translateY(3px);border-bottom-width:2px}
+  .btn:focus-visible{outline:3px solid var(--player);outline-offset:3px}
+  .btn.ghost{
+    background:rgba(18,22,29,.55);color:rgba(255,246,234,.72);
+    border:2px solid rgba(255,246,234,.18);border-bottom-width:3px;
+    font-size:14px;padding:7px 18px 5px;width:auto;border-radius:999px;
+    backdrop-filter:blur(6px);
+  }
+  .stats{
+    display:flex;gap:12px;justify-content:center;margin:0 0 18px;
+  }
+  .stat{
+    flex:1;background:rgba(255,246,234,.05);border-radius:14px;padding:10px 6px 8px;
+  }
+  .stat .k{font-family:"Chivo Mono",monospace;font-size:24px;font-weight:600;color:var(--cream);font-variant-numeric:tabular-nums}
+  .stat .t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,246,234,.5);font-weight:700}
+
+  #toast{
+    position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-size:clamp(22px,6vw,32px);font-weight:800;color:var(--cream);
+    text-shadow:0 4px 0 rgba(18,22,29,.5);
+    opacity:0;transition:opacity .25s ease;pointer-events:none;z-index:4;
+  }
+  #toast.show{opacity:1}
+
+  /* pastillas de los poderes activos (imán, baile) */
+  #buffs{
+    position:fixed;left:50%;top:82px;transform:translateX(-50%);
+    display:flex;gap:8px;z-index:3;pointer-events:none;
+  }
+  #buffs .buff{
+    display:flex;align-items:center;gap:7px;
+    font-size:13px;font-weight:700;
+    background:rgba(18,22,29,.75);
+    border:2px solid rgba(255,246,234,.16);border-bottom-width:4px;
+    border-radius:999px;padding:5px 13px 3px;
+    backdrop-filter:blur(6px);
+    animation:buffIn .22s cubic-bezier(.34,1.56,.64,1);
+  }
+  #buffs .buff[hidden]{display:none}
+  #buffs .buff b{
+    font-family:"Chivo Mono",monospace;font-variant-numeric:tabular-nums;font-weight:600;
+  }
+  #buffs .buff.magnet{border-color:rgba(143,216,255,.5);color:#8fd8ff}
+  #buffs .buff.dance{border-color:rgba(255,143,180,.5);color:#ff8fb4}
+  @keyframes buffIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* destello rojizo del borde cuando te caes */
+  #flash{
+    position:fixed;inset:0;pointer-events:none;z-index:2;opacity:0;
+    background:radial-gradient(120% 90% at 50% 55%, transparent 34%, rgba(196,16,106,.62));
+    transition:opacity .42s ease;
+  }
+  #flash.on{opacity:1;transition:opacity .05s ease}
+
+  #stick{
+    position:fixed;width:110px;height:110px;border-radius:50%;
+    border:2px solid rgba(255,246,234,.3);background:rgba(18,22,29,.25);
+    transform:translate(-50%,-50%);pointer-events:none;opacity:0;transition:opacity .15s;z-index:3;
+  }
+  #knob{
+    position:absolute;left:50%;top:50%;width:48px;height:48px;border-radius:50%;
+    background:var(--glaze);border:2px solid rgba(255,246,234,.55);
+    transform:translate(-50%,-50%);
+  }
+  #stick.on{opacity:.85}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<canvas id="stage"></canvas>
+
+<div id="stick"><div id="knob"></div></div>
+<div id="toast"></div>
+<div id="flash"></div>
+<div id="buffs"></div>
+
+<div id="ui">
+  <div class="hudbar">
+    <div class="chip pink">
+      <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9.5" fill="#ff2d8e"/>
+        <circle cx="12" cy="12" r="3.4" fill="#12161d"/>
+        <circle cx="8" cy="7.5" r="1" fill="#fff6ea"/><circle cx="16.5" cy="10" r="1" fill="#fff6ea"/>
+        <circle cx="9" cy="16.5" r="1" fill="#fff6ea"/><circle cx="15.5" cy="16" r="1" fill="#fff6ea"/>
+      </svg>
+      <div class="stackcol">
+        <span class="label" data-i18n="hudCarry">Carrying</span>
+        <span class="value" id="carry">0</span>
+      </div>
+    </div>
+
+    <div class="chip">
+      <div class="stackcol">
+        <span class="label"><span data-i18n="hudLevel">Level</span> <b id="lvl">1/10</b></span>
+        <div id="planks"></div>
+        <span class="lvlname" id="lvlname"></span>
+      </div>
+    </div>
+
+    <div class="chip">
+      <div class="stackcol">
+        <span class="label" data-i18n="hudTime">Time</span>
+        <span class="value" id="clock">0.0</span>
+      </div>
+    </div>
+
+    <button class="chip iconbtn" id="pauseBtn" type="button" data-i18n-aria="pauseAria" aria-label="Pause">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="6" y="4" width="4" height="16" rx="1.5" fill="currentColor"/>
+        <rect x="14" y="4" width="4" height="16" rx="1.5" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="footer">
+    <span class="hint" id="hint" data-i18n="hint">Drag to move</span>
+  </div>
+</div>
+
+<div class="overlay" id="startScreen">
+  <div class="card">
+    <div class="langpick">
+      <button type="button" id="btnEn" class="on">EN</button>
+      <button type="button" id="btnEs">ES</button>
+    </div>
+
+    <h1 class="logo"><img id="menuLogo" alt="Donut Bridge"></h1>
+
+    <div class="tabs" role="tablist">
+      <button class="tab on" id="tabPlay" type="button" role="tab" aria-selected="true" aria-controls="panelPlay" data-i18n="tabPlay">How to play</button>
+      <button class="tab" id="tabKeys" type="button" role="tab" aria-selected="false" aria-controls="panelKeys" data-i18n="tabKeys">Controls</button>
+    </div>
+
+    <div id="panelPlay" role="tabpanel" aria-labelledby="tabPlay">
+      <p data-i18n="intro">You are standing on the edge of the cliff. The only way across is the one you build.</p>
+      <ul class="steps">
+        <li><b>1</b><span data-i18n="step1">Pick up donuts by walking over them: they stack on your head.</span></li>
+        <li><b>2</b><span data-i18n="step2">Walk toward the chasm and each donut turns into a bridge plank.</span></li>
+        <li><b>3</b><span data-i18n="step3">Fill every gap to reach the far platform. Step into the void and you go back to the start.</span></li>
+        <li><b>4</b><span data-i18n="step4">There are <strong>10 levels</strong>: each one with a longer chasm, a narrower bridge and a different shape.</span></li>
+      </ul>
+    </div>
+
+    <div id="panelKeys" role="tabpanel" aria-labelledby="tabKeys" hidden>
+      <ul class="keylist">
+        <li><span class="keys"><kbd>WASD</kbd><kbd>↑↓←→</kbd></span><span data-i18n="kMove">Move (or drag on screen)</span></li>
+        <li data-tone="add"><span class="keys"><kbd>=</kbd></span><span data-i18n="kAdd">+1 donut on the stack</span></li>
+        <li data-tone="sub"><span class="keys"><kbd>−</kbd></span><span data-i18n="kSub">−1 donut off the stack</span></li>
+        <li data-tone="wipe"><span class="keys"><kbd>X</kbd></span><span data-i18n="kWipe">Dump the whole stack</span></li>
+        <li data-tone="bridge"><span class="keys"><kbd>R</kbd></span><span data-i18n="kBridge">Tear the bridge down</span></li>
+        <li data-tone="magnet"><span class="keys"><kbd>I</kbd></span><span data-i18n="kMagnet">Magnet: 20 s pulling donuts in (stacks up)</span></li>
+        <li data-tone="dance"><span class="keys"><kbd>B</kbd></span><span data-i18n="kDance">Dance: 15 s emote (stacks up, cannot be cut)</span></li>
+        <li><span class="keys"><kbd>N</kbd></span><span data-i18n="kRestart">Restart the current level</span></li>
+        <li><span class="keys"><kbd>Esc</kbd></span><span data-i18n="kPause">Pause</span></li>
+      </ul>
+    </div>
+
+    <button class="btn" id="playBtn" data-i18n="play">Play</button>
+  </div>
+</div>
+
+<div class="overlay" id="pauseScreen" hidden>
+  <div class="card">
+    <p class="eyebrow" id="pauseLvl">Level 1 of 10</p>
+    <h1 data-i18n="paused">On <em>pause</em></h1>
+    <p id="pauseName"></p>
+    <button class="btn" id="resumeBtn" data-i18n="resume">Resume</button>
+    <button class="btn ghost" id="menuBtn" style="margin-top:11px" data-i18n="mainMenu">Main menu</button>
+  </div>
+</div>
+
+<div class="overlay" id="winScreen" hidden>
+  <div class="card">
+    <p class="eyebrow" id="winEyebrow"></p>
+    <p class="gamename"><img id="winLogo" alt="Donut Bridge"></p>
+    <h1 id="winTitle" data-i18n="crossed">You crossed <em>the chasm</em></h1>
+    <div class="stats">
+      <div class="stat"><div class="k" id="winTime">0.0</div><div class="t" data-i18n="statSeconds">Seconds</div></div>
+      <div class="stat"><div class="k" id="winDonuts">0</div><div class="t" data-i18n="statDonuts">Donuts</div></div>
+      <div class="stat"><div class="k" id="winFalls">0</div><div class="t" data-i18n="statFalls">Falls</div></div>
+    </div>
+    <button class="btn" id="againBtn">Next level</button>
+    <button class="btn ghost" id="retryBtn" style="margin-top:11px" data-i18n="retry">Retry level</button>
+  </div>
+</div>
+
+<div class="overlay splash" id="splash">
+  <p class="splashload" id="splashLoad" data-i18n="loading">Loading…</p>
+</div>
+
+
+<script>
+window.MODEL_URL = 'assets/homero.glb?v=d96d61f1';
+window.LOGO_IMG = 'assets/logo.webp?v=f0f96a0b';
+window.COVER_IMG = 'assets/cover.webp?v=bc21041b';
+window.ICON_IMG = 'assets/icon180.png?v=bd27968b';
+window.SPLASH_T0 = performance.now();
+document.getElementById('splash').style.setProperty('--cover', 'url(' + window.COVER_IMG + ')');
+document.getElementById('menuLogo').src = window.LOGO_IMG;
+document.getElementById('winLogo').src = window.LOGO_IMG;
+['icon', 'apple-touch-icon'].forEach(function (rel) {
+  var l = document.createElement('link');
+  l.rel = rel; l.type = 'image/png'; l.sizes = '180x180'; l.href = window.ICON_IMG;
+  document.head.appendChild(l);
+});
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script>
+/* Solo arranca en los dominios de la lista. Es un cerrojo, no una caja fuerte. */
+(function () {
+  var ok = ["localhost","127.0.0.1","www.interactiveprop.com","interactiveprop.com"];
+  var h = location.hostname;
+  /* Previews de Vercel de ESTE proyecto (para poder probar antes de publicar).
+     No abre la puerta a cualquier *.vercel.app: exige el nombre del proyecto. */
+  var esPreview = /^interactiveprops-store-[a-z0-9-]+\.vercel\.app$/.test(h);
+  if (ok.indexOf(h) < 0 && !esPreview) {
+    document.documentElement.innerHTML =
+      '<body style="background:#12161d;color:#fff6ea;font:600 16px system-ui;' +
+      'display:grid;place-items:center;height:100vh;margin:0">Copia no autorizada</body>';
+    throw new Error('dominio no autorizado');
+  }
+})();
+</script>
+<script src="game.js?v=1f5912b7"></script>
+
+
+
+
+

@@ -13,21 +13,51 @@ const FIREBASE_CONFIG = {
   appId: "1:152459636744:web:9edadf7733fcf2b8c361bd"
 };
 var _db: any = null, _dbCbs: any[] = [];
+var _auth: any = null, _authCbs: any[] = [];
 function getDB(): Promise<any> { return new Promise(r => { if (_db) { r(_db); return; } _dbCbs.push(r); }); }
+function getAuth(): Promise<any> { return new Promise(r => { if (_auth) { r(_auth); return; } _authCbs.push(r); }); }
+function loadScript(src: string): Promise<void> {
+  return new Promise(res => { const s = document.createElement("script"); s.src = src; s.onload = () => res(); document.head.appendChild(s); });
+}
 function initFirebase() {
   if (typeof window === "undefined") return;
-  var s1 = document.createElement("script"); s1.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
-  s1.onload = () => { var s2 = document.createElement("script"); s2.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
-    s2.onload = () => { if (!(window as any).firebase.apps.length) (window as any).firebase.initializeApp(FIREBASE_CONFIG); _db = (window as any).firebase.firestore(); _dbCbs.forEach(c => c(_db)); _dbCbs = []; };
-    document.head.appendChild(s2); }; document.head.appendChild(s1);
+  const B = "https://www.gstatic.com/firebasejs/10.7.1/";
+  loadScript(B + "firebase-app-compat.js")
+    .then(() => Promise.all([loadScript(B + "firebase-firestore-compat.js"), loadScript(B + "firebase-auth-compat.js")]))
+    .then(() => {
+      const fb = (window as any).firebase;
+      if (!fb.apps.length) fb.initializeApp(FIREBASE_CONFIG);
+      _db = fb.firestore(); _dbCbs.forEach(c => c(_db)); _dbCbs = [];
+      _auth = fb.auth(); _authCbs.forEach(c => c(_auth)); _authCbs = [];
+    });
 }
 if (typeof window !== "undefined") initFirebase();
+
+// ─── ADMIN AUTH (Firebase Authentication — no password lives in this code) ────
+async function adminSignIn(email: string, password: string) {
+  const auth = await getAuth();
+  await auth.signInWithEmailAndPassword(email.trim(), password);
+}
+async function adminSignOut() { try { const auth = await getAuth(); await auth.signOut(); } catch (e) { /* noop */ } }
+function onAdminAuth(cb: (user: any) => void) { getAuth().then(auth => auth.onAuthStateChanged(cb)); }
 async function fsGet(col: string, id: string) { try { const db=await getDB(),d=await db.collection(col).doc(id).get(); return d.exists?d.data():null; } catch(e){return null;} }
 async function fsSet(col: string, id: string, data: any) { try { const db=await getDB(); await db.collection(col).doc(id).set(data); return true; } catch(e){return false;} }
 async function fsAdd(col: string, data: any) { try { const db=await getDB(),r=await db.collection(col).add(data); return r.id; } catch(e){return null;} }
 async function fsGetAll(col: string) { try { const db=await getDB(),s=await db.collection(col).orderBy("date","desc").get(); const r:any[]=[]; s.forEach((d:any)=>r.push({_id:d.id,...d.data()})); return r; } catch(e){return[];} }
 function fsListen(col: string, cb: (d:any[])=>void) { getDB().then(db=>{ db.collection(col).orderBy("date","desc").onSnapshot((s:any)=>{ const r:any[]=[]; s.forEach((d:any)=>r.push({_id:d.id,...d.data()})); cb(r); }); }); }
-async function loadProducts() { try { const d=await fsGet("settings","products"); if(d?.items) return d.items; const r=localStorage.getItem("ip-products"); return r?JSON.parse(r):DEFAULT_PRODUCTS; } catch(e){return DEFAULT_PRODUCTS;} }
+// Fotos nuevas de producto (2026). Firestore todavia guarda las URLs viejas de
+// imgur; este mapa las cambia por los archivos locales al cargar. Solo pisa esas
+// URLs exactas: en cuanto cambies una imagen desde el panel de admin, el valor
+// nuevo ya no coincide con ninguna clave y el mapa se aparta solo.
+const IMG_NUEVAS: Record<string,string> = {
+  "https://i.imgur.com/oblBDNn.png": "/productos/pump.webp",
+  "https://i.imgur.com/jCk2vdC.png": "/productos/blaster.webp",
+  "https://i.imgur.com/7hYKQdV.png": "/productos/silly-string.webp",
+};
+function conFotosNuevas(items:any[]) {
+  return items.map((p:any)=> (p && IMG_NUEVAS[p.img]) ? {...p, img:IMG_NUEVAS[p.img]} : p);
+}
+async function loadProducts() { try { const d=await fsGet("settings","products"); if(d?.items) return conFotosNuevas(d.items); const r=localStorage.getItem("ip-products"); return r?conFotosNuevas(JSON.parse(r)):DEFAULT_PRODUCTS; } catch(e){return DEFAULT_PRODUCTS;} }
 async function saveProducts(p:any[]) { try { await fsSet("settings","products",{items:p,updated:new Date().toISOString()}); localStorage.setItem("ip-products",JSON.stringify(p)); } catch(e){localStorage.setItem("ip-products",JSON.stringify(p));} }
 async function loadOrders() { try { return await fsGetAll("orders"); } catch(e){ const r=localStorage.getItem("ip-orders"); return r?JSON.parse(r):[]; } }
 async function saveOrder(o:any) { try { await fsAdd("orders",o); } catch(e){ const ex=JSON.parse(localStorage.getItem("ip-orders")||"[]"); localStorage.setItem("ip-orders",JSON.stringify([o,...ex])); } }
@@ -36,8 +66,13 @@ async function saveLogo(url:string) { try { await fsSet("settings","logo",{url,u
 async function deleteLogo() { try { await fsSet("settings","logo",{url:LOGO_URL,updated:new Date().toISOString()}); localStorage.removeItem("ip-logo"); } catch(e){localStorage.removeItem("ip-logo");} }
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
-const OWNER_PASSWORD = "PROPS0326";
-const PAYPAL_CLIENT_ID = "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
+// Admin credentials are NOT stored in this codebase. Sign-in is handled by
+// Firebase Authentication (the user lives in the Firebase console).
+// El client-id de PayPal es PUBLICO por diseño (viaja en el navegador). Se puede
+// sobreescribir con VITE_PAYPAL_CLIENT_ID en Vercel para probar en sandbox sin
+// tocar el codigo. El SECRETO nunca vive aqui: solo en api/comprar.js.
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID
+  || "AXAyGKDTl6t0rAL_b0irh3eO1VikIYBy5ROUeCEUoPBlKpG9kaiATkFZjYccbDyqcIRQ5kLVFlPRVyNT";
 const LOGO_URL = "https://i.postimg.cc/1X5hxnT4/Untitled-design-(36).png";
 const CATEGORIES = ["Props","Effects","Bundles","Games","Accessories","Other"];
 const EMOJIS = ["🎈","🔫","🎊","🎉","💜","📦","⚡","🌀","🎯","🔥","💥","🎆","🎇","✨","🌟","💫","🎪","🎭"];
@@ -61,43 +96,12 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 const SPRING = { type:"spring", stiffness:380, damping:28 } as const;
 
 const DEFAULT_PRODUCTS = [
-  {id:1,name:"Interactive Pump",price:69.99,type:"physical",category:"Props",desc:"The Interactive Pump lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions that transform passive viewers into active participants.",emoji:"🎈",img:"https://i.imgur.com/oblBDNn.png",stock:25,active:true},
-  {id:2,name:"Interactive Blaster",price:89.99,type:"physical",category:"Props",desc:"A live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, and webhooks. Built for creators who want high-energy audience interaction with surprise, tension, and unforgettable moments.",emoji:"🔫",img:"https://i.imgur.com/jCk2vdC.png",stock:12,active:true},
-  {id:3,name:"Interactive Silly String",price:69.99,type:"physical",category:"Props",desc:"A streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences.",emoji:"🎊",img:"https://i.imgur.com/7hYKQdV.png",stock:40,active:true},
+  {id:1,name:"Interactive Pump",price:69.99,type:"physical",category:"Props",desc:"The Interactive Pump lets viewers activate real-time pumping actions during live broadcasts using stream alerts, gifts, webhooks, and custom triggers. Designed to create funny, chaotic, and highly engaging reactions that transform passive viewers into active participants.",emoji:"🎈",img:"/productos/pump.webp",stock:25,active:true},
+  {id:2,name:"Interactive Blaster",price:89.99,type:"physical",category:"Props",desc:"A live-streaming foam dart launcher that allows viewers to trigger shots in real time through gifts, donations, alerts, and webhooks. Built for creators who want high-energy audience interaction with surprise, tension, and unforgettable moments.",emoji:"🔫",img:"/productos/blaster.webp",stock:12,active:true},
+  {id:3,name:"Interactive Silly String",price:69.99,type:"physical",category:"Props",desc:"A streamer-controlled prank device that lets viewers trigger real cans of silly string live during your stream. Designed for content creators, it turns ordinary livestreams into chaotic, hilarious, and unforgettable interactive experiences.",emoji:"🎊",img:"/productos/silly-string.webp",stock:40,active:true},
   {id:4,name:"Interactive LED Sign",price:59.99,type:"physical",category:"Props",desc:"A customizable LED streamer sign that brings your name or brand to life with dynamic lighting and interactive effects. Supports up to 8 letters at base price, with $3 per additional letter. Approx. 18 inches wide depending on name length.",emoji:"🎉",img:"https://i.imgur.com/ia02jiA.png",stock:18,active:true},
   {id:6,name:"Chaos Bundle",price:220.00,type:"physical",category:"Bundles",desc:"The ultimate all-in-one interactive setup combining the Pump, Blaster, and Silly String. Viewers trigger multiple real-world effects live through gifts, donations, alerts, webhooks, and custom stream events — nonstop chaos guaranteed.",emoji:"📦",img:null,stock:8,active:true},
   {id:7,name:"Interactive Stellar Dash",price:0.99,type:"digital",category:"Games",desc:"A fast-paced arcade space runner where live chat controls the chaos. Viewers trigger obstacles, attacks, and difficulty changes in real time — turning every match into an unpredictable battle for survival built for streamers.",emoji:"🚀",img:"https://i.imgur.com/jlRiv7Q.png",stock:99,active:true},
-];
-
-const FAQ_DATA = [
-  {category:"General Questions",items:[
-    {q:"What is Interactive Props?",a:"Interactive Props creates interactive streaming products that allow viewers to trigger real-life effects during livestreams using gifts, donations, alerts, webhooks, and other stream integrations."},
-    {q:"Who are these products made for?",a:"Our products are designed for streamers, TikTok creators, Twitch creators, Kick streamers, YouTubers, IRL content creators, gaming creators, and anyone looking to create interactive live experiences."},
-    {q:"Do your products work with TikTok Live?",a:"Yes. Many of our products can work with TikTok Live through supported third-party tools, webhooks, or stream automation platforms."},
-    {q:"Do your products work with Twitch, Kick, or YouTube?",a:"Yes. Our products are designed to work with multiple streaming platforms depending on your setup and software integration."},
-  ]},
-  {category:"Product & Setup",items:[
-    {q:"Are the products difficult to set up?",a:"No. Most setups only require Wi-Fi, a browser, and simple webhook or streaming tool integration. We design our products to be as beginner-friendly as possible."},
-    {q:"Do I need programming experience?",a:"No programming experience is required for most basic setups. We provide guides and support to help you get started."},
-    {q:"Can viewers control the products live?",a:"Yes. Depending on your setup, viewers can trigger products through gifts, donations, channel points, stream events, chat commands, goals, and custom automation tools."},
-    {q:"Can multiple products be used together?",a:"Yes. Many streamers combine multiple Interactive Props products to create larger interactive setups and more engaging livestream experiences."},
-  ]},
-  {category:"Orders & Shipping",items:[
-    {q:"How long does shipping take?",a:"Processing and shipping times vary depending on product demand. Estimated delivery times are shown during checkout whenever available."},
-    {q:"Do you ship internationally?",a:"International shipping availability may vary depending on the destination country and product type."},
-    {q:"Will I receive tracking information?",a:"Yes. Once your order ships, tracking information will be sent to the email used during checkout."},
-    {q:"Can I cancel my order?",a:"Orders can only be canceled before processing or shipment preparation begins."},
-  ]},
-  {category:"Returns & Warranty",items:[
-    {q:"Do you accept returns?",a:"Yes. Eligible unused products may be returned within 14 days of delivery in original condition and packaging.",link:"returns"},
-    {q:"What if my product arrives damaged?",a:"Please contact us within 48 hours of delivery with photos or videos of the issue so we can help resolve it quickly."},
-    {q:"Do your products include a warranty?",a:"Yes. Eligible products include a limited 90-day warranty covering manufacturing defects under normal use.",link:"warranty"},
-  ]},
-  {category:"Support",items:[
-    {q:"How do I contact support?",a:"You can reach us anytime at interactiveprops.official@gmail.com or through our Contact page.",link:"contact"},
-    {q:"Do you offer setup help?",a:"Yes. We aim to help customers get their products working properly and provide setup guidance whenever possible."},
-    {q:"Will more products be released?",a:"Absolutely. We are continuously developing new interactive products and ideas for creators and livestreamers."},
-  ]},
 ];
 
 // ─── TRANSLATIONS ─────────────────────────────────────────────────────────────
@@ -447,45 +451,6 @@ function ContactView({setView,t}:any) {
   );
 }
 
-function FAQView({setView,t}:any) {
-  const [open,setOpen]=useState<number|null>(null);
-  let idx=0;
-  return (
-    <PageShell title="FAQs" setView={setView} t={t}>
-      <p className="mono" style={{color:T4,fontSize:9,letterSpacing:"0.16em",marginBottom:52,textTransform:"uppercase"}}>Everything you need to know about Interactive Props</p>
-      {FAQ_DATA.map(section=>(
-        <div key={section.category} style={{marginBottom:48}}>
-          <h2 className="orb" style={{fontSize:13,fontWeight:800,letterSpacing:"0.16em",color:C,textTransform:"uppercase",marginBottom:16}}>{section.category}</h2>
-          <div style={{display:"flex",flexDirection:"column",gap:2}}>
-            {section.items.map((item:any)=>{
-              const myIdx=idx++;const isOpen=open===myIdx;
-              return (
-                <motion.div key={myIdx} style={{background:isOpen?BG3:BG2,border:`1px solid ${isOpen?BRC:BR}`,borderRadius:4,overflow:"hidden"}} animate={{boxShadow:isOpen?`0 0 20px rgba(0,212,255,0.08)`:"0 0 0px transparent"}} transition={{duration:0.25}}>
-                  <motion.button onClick={()=>setOpen(isOpen?null:myIdx)} style={{width:"100%",background:"none",border:"none",padding:"16px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",gap:12,textAlign:"left",fontFamily:"'Rajdhani',sans-serif"}} whileHover={{backgroundColor:"rgba(255,255,255,0.02)"}} transition={{duration:0.15}}>
-                    <span style={{fontSize:14,fontWeight:600,color:isOpen?C:T2,lineHeight:1.4}}>{item.q}</span>
-                    <motion.span className="mono" style={{color:C,fontSize:16,flexShrink:0,fontWeight:700}} animate={{rotate:isOpen?45:0}} transition={{duration:0.2}}>+</motion.span>
-                  </motion.button>
-                  <AnimatePresence initial={false}>
-                    {isOpen&&<motion.div initial={{height:0,opacity:0}} animate={{height:"auto",opacity:1}} exit={{height:0,opacity:0}} transition={{duration:0.28,ease:EASE}}>
-                      <div style={{padding:"0 20px 18px",borderTop:`1px solid ${BR}`}}>
-                        <p style={{color:T3,fontSize:14,lineHeight:1.8,marginTop:14,fontWeight:500}}>{item.a}</p>
-                        {item.link&&<NBtn variant="cyan" size="sm" style={{marginTop:12}} onClick={()=>setView(item.link)}>{t.viewPolicy}</NBtn>}
-                      </div>
-                    </motion.div>}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-      <div style={{background:BG2,border:`1px solid ${BR}`,borderRadius:6,padding:"32px",textAlign:"center",marginTop:16}}>
-        <p style={{color:T3,fontSize:14,marginBottom:20,fontWeight:500}}>{t.stillQuestions}</p>
-        <NBtn variant="fill" size="lg" onClick={()=>setView("contact")}>{t.contactUs}</NBtn>
-      </div>
-    </PageShell>
-  );
-}
 
 function PolicyView({type,setView,t}:any) {
   const title=type==="returns"?"RETURNS & REFUNDS":type==="warranty"?"WARRANTY POLICY":"SHIPPING & DELIVERY";
@@ -529,9 +494,16 @@ function PolicyView({type,setView,t}:any) {
   );
 }
 
-function LoginView({onLogin,ownerPassword,t}:any) {
-  const [pw,setPw]=useState(""),[err,setErr]=useState(false);
-  function handle(){if(pw.trim()===ownerPassword)onLogin();else{setErr(true);setTimeout(()=>setErr(false),1800);}}
+function LoginView({onLogin,t}:any) {
+  const [email,setEmail]=useState(""),[pw,setPw]=useState("");
+  const [err,setErr]=useState(false),[busy,setBusy]=useState(false);
+  async function handle(){
+    if(busy) return;
+    setBusy(true);
+    try{ await adminSignIn(email,pw); onLogin(); }
+    catch(e){ setErr(true); setTimeout(()=>setErr(false),2400); }
+    finally{ setBusy(false); }
+  }
   return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"calc(100vh - 64px)",background:BG,padding:24,position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,212,255,0.05),transparent 65%)",top:"50%",left:"50%",transform:"translate(-50%,-50%)",pointerEvents:"none"}}/>
@@ -541,13 +513,16 @@ function LoginView({onLogin,ownerPassword,t}:any) {
         <h2 className="orb" style={{fontSize:28,letterSpacing:"0.1em",color:C,marginBottom:8,animation:"pulseC 4s ease-in-out infinite"}}>{t.login}</h2>
         <p className="mono" style={{color:T4,fontSize:10,marginBottom:32,letterSpacing:"0.1em"}}>{t.loginSub}</p>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <motion.input type="password" className="mono" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
+          <motion.input type="email" autoComplete="username" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
+            style={{padding:"12px 14px",borderRadius:4,border:`1px solid ${BRC}`,fontSize:14,textAlign:"center",outline:"none",width:"100%",background:BG3,color:T1,fontFamily:"'Rajdhani',sans-serif"}}
+            placeholder="admin@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}} autoFocus/>
+          <motion.input type="password" autoComplete="current-password" className="mono" animate={{borderColor:err?P:BRC}} transition={{duration:0.2}}
             style={{padding:"12px 14px",borderRadius:4,border:`1px solid ${BRC}`,fontSize:20,letterSpacing:"0.3em",textAlign:"center",outline:"none",width:"100%",background:BG3,color:C,fontFamily:"'Share Tech Mono',monospace"}}
-            placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}} autoFocus/>
+            placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")handle();}}/>
           <AnimatePresence>
             {err&&<motion.p initial={{opacity:0,height:0}} animate={{opacity:1,height:"auto"}} exit={{opacity:0,height:0}} className="mono" style={{color:P,fontSize:10,letterSpacing:"0.12em"}}>{t.incorrectPw}</motion.p>}
           </AnimatePresence>
-          <NBtn variant="fill" size="lg" full onClick={handle}>{t.login}</NBtn>
+          <NBtn variant="fill" size="lg" full onClick={handle}>{busy?"…":t.login}</NBtn>
         </div>
       </motion.div>
     </div>
@@ -729,9 +704,7 @@ function usePayPal(clientId:string) {
   return loaded;
 }
 
-// ─── LANDING (scroll-cinematic single page) ────────────────────────────────────
-const HERO_FRAME_COUNT = 115;
-const heroFramePath = (i:number) => `/frames/hero/frame_${String(i).padStart(4,"0")}.jpg`;
+// ─── LANDING (v4 neon single page) ─────────────────────────────────────────────
 const ACCENTS = ["cyan","pink","violet","yellow"];
 
 // Traducciones de la landing (la prosa; los nombres/descripciones de producto
@@ -741,6 +714,18 @@ const LT:Record<string,any> = {
     navProducts:"Products",navHow:"How it works",navPlatforms:"Platforms",navFaq:"FAQ",navContact:"Contact",
     tagL:"INTERACTIVE STREAMING DEVICES",tagR:"LIVE · REAL-TIME",scroll:"SCROLL",
     marquee:["GIFTS","DONATIONS","SUBS","ALERTS","WEBHOOKS","CHANNEL POINTS","GOALS","CUSTOM TRIGGERS"],
+    heroTitleA:"Streaming should be more than watching. It should be ",heroTitleWord:"interactive.",
+    heroLead:"Interactive Props builds physical streaming devices that let viewers trigger real-world actions live — through gifts, donations, subscriptions, alerts, webhooks, channel points, goals, and custom triggers.",
+    heroBtn1:"Explore devices",heroBtn2:"See how it works",
+    triggersLabel:"Triggered by what your chat does",
+    triggerNames:["Gifts","Donations","Subscriptions","Alerts","Webhooks","Channel points","Goals","Custom triggers"],
+    ctaTitle:"Turn chat into real-world actions.",ctaSubA:"Make your stream ",ctaSubWord:"unforgettable.",
+    ctaMailQ:"Questions, setup help or partnerships?",
+    featuredKicker:"The lineup",featuredTitleA:"Featured ",featuredTitleWord:"products",viewAll:"View all products",
+    prodPageEyebrow:"The lineup",prodPageTitleA:"All ",prodPageTitleWord:"products",
+    prodPageSub:"Physical streaming devices your audience triggers live — through gifts, donations, subscriptions, alerts, webhooks, channel points, goals and custom triggers.",
+    gamesSoonTitle:"Games are coming soon",
+    gamesSoonBody:"Interactive mini-games your viewers control live are in the works. Want to be first to know when they drop? Reach us at",
     introKicker:"Welcome to Interactive Props",
     introHeadA:"Streaming should be more than watching.",introHeadB:"It should be interactive.",
     introSub:<>We build interactive streaming devices that connect your viewers directly to your stream in a physical, real-life way. From the <b>Interactive Blaster</b> firing foam darts mid-stream, to the <b>Interactive Silly String</b> launching chaos, to the <b>Interactive Pump</b> creating audience-triggered moments — every product turns viewers into participants instead of spectators.</>,
@@ -790,11 +775,41 @@ const LT:Record<string,any> = {
     footProducts:"Products",footCompany:"Company",footSupport:"Support",
     footAbout:"About us",footHow:"How it works",footPlatforms:"Platforms",footFaq:"FAQ",
     footShip:"Shipping & Delivery",footRet:"Returns & Refunds",footWar:"Warranty Policy",footContact:"Contact",
+    juego:{
+      eyebrow:"INTERACTIVE GAMES",
+      badge:"Digital game",verJuego:"View game",
+      desajusteTitulo:"Payments are not safe to run yet",
+      desajusteBody:"The server is in sandbox mode but the browser is set up for live PayPal. Buttons are hidden on purpose: paying here would charge real money and still not create a licence. Set VITE_PAYPAL_CLIENT_ID (sandbox) for this environment and redeploy.",
+      desc:"A fast-paced donut-hopping run. Buy once, play forever — on any device, from your own private link.",
+      bullets:["One-time payment, no subscription","Plays in your browser — nothing to install","Works on desktop and mobile","Your link never expires"],
+      pagoUnico:"one-time payment",
+      cargando:"Loading payment options…",
+      procesando:"Confirming your payment…",
+      acceso:"After paying you get a private link. That link is your key — keep it.",
+      errorRed:"We couldn't reach the server. If you were charged, email us and we'll send your link.",
+      errorPago:"The payment failed. Please try again.",
+      listoTitulo:"You're in!",
+      listoSub:"This is your private link. We also sent it to your PayPal email.",
+      jugar:"Play now",
+      guarda:"Save this link — it works forever, on any device.",
+    },
   },
   es:{
     navProducts:"Productos",navHow:"Cómo funciona",navPlatforms:"Plataformas",navFaq:"Preguntas",navContact:"Contacto",
     tagL:"DISPOSITIVOS DE STREAMING INTERACTIVOS",tagR:"EN VIVO · TIEMPO REAL",scroll:"BAJÁ",
     marquee:["REGALOS","DONACIONES","SUBS","ALERTAS","WEBHOOKS","PUNTOS DE CANAL","METAS","TRIGGERS"],
+    heroTitleA:"El streaming debería ser más que mirar. Debería ser ",heroTitleWord:"interactivo.",
+    heroLead:"Interactive Props crea dispositivos físicos de streaming que permiten a tus viewers activar acciones del mundo real en vivo — mediante regalos, donaciones, suscripciones, alertas, webhooks, puntos de canal, metas y triggers personalizados.",
+    heroBtn1:"Explorar dispositivos",heroBtn2:"Ver cómo funciona",
+    triggersLabel:"Activado por lo que hace tu chat",
+    triggerNames:["Regalos","Donaciones","Suscripciones","Alertas","Webhooks","Puntos de canal","Metas","Triggers personalizados"],
+    ctaTitle:"Convierte el chat en acciones reales.",ctaSubA:"Haz tu stream ",ctaSubWord:"inolvidable.",
+    ctaMailQ:"¿Preguntas, ayuda con la configuración o colaboraciones?",
+    featuredKicker:"La línea",featuredTitleA:"Productos ",featuredTitleWord:"destacados",viewAll:"Ver todos los productos",
+    prodPageEyebrow:"La línea",prodPageTitleA:"Todos los ",prodPageTitleWord:"productos",
+    prodPageSub:"Dispositivos físicos de streaming que tu audiencia activa en vivo — mediante regalos, donaciones, suscripciones, alertas, webhooks, puntos de canal, metas y triggers personalizados.",
+    gamesSoonTitle:"Los juegos llegan pronto",
+    gamesSoonBody:"Estamos preparando mini-juegos interactivos que tus viewers controlan en vivo. ¿Querés ser el primero en enterarte cuando salgan? Escribinos a",
     introKicker:"Bienvenido a Interactive Props",
     introHeadA:"El streaming debería ser más que mirar.",introHeadB:"Debería ser interactivo.",
     introSub:<>Creamos dispositivos de streaming interactivos que conectan a tus viewers directamente con tu stream de forma física y real. Desde el <b>Interactive Blaster</b> disparando dardos de gomaespuma en vivo, al <b>Interactive Silly String</b> desatando el caos, hasta el <b>Interactive Pump</b> creando momentos activados por la audiencia — cada producto convierte a los espectadores en participantes.</>,
@@ -844,6 +859,24 @@ const LT:Record<string,any> = {
     footProducts:"Productos",footCompany:"Empresa",footSupport:"Soporte",
     footAbout:"Nosotros",footHow:"Cómo funciona",footPlatforms:"Plataformas",footFaq:"Preguntas",
     footShip:"Envíos y Entregas",footRet:"Devoluciones y Reembolsos",footWar:"Garantía",footContact:"Contacto",
+    juego:{
+      eyebrow:"JUEGOS INTERACTIVOS",
+      badge:"Juego digital",verJuego:"Ver juego",
+      desajusteTitulo:"Todavia no es seguro cobrar aqui",
+      desajusteBody:"El servidor esta en modo sandbox pero el navegador esta configurado con PayPal de produccion. Ocultamos los botones a proposito: pagar aqui cobraria dinero REAL y aun asi no se emitiria la licencia. Pon VITE_PAYPAL_CLIENT_ID (sandbox) en este entorno y vuelve a desplegar.",
+      desc:"Un runner trepidante saltando de dona en dona. Lo compras una vez y lo juegas para siempre — en cualquier dispositivo, desde tu enlace privado.",
+      bullets:["Pago único, sin suscripción","Se juega en el navegador — no hay que instalar nada","Funciona en computadora y en móvil","Tu enlace no caduca nunca"],
+      pagoUnico:"pago único",
+      cargando:"Cargando opciones de pago…",
+      procesando:"Confirmando tu pago…",
+      acceso:"Al pagar recibes un enlace privado. Ese enlace es tu llave — guárdalo.",
+      errorRed:"No pudimos contactar al servidor. Si se te cobró, escríbenos y te mandamos tu enlace.",
+      errorPago:"El pago falló. Inténtalo de nuevo.",
+      listoTitulo:"¡Listo!",
+      listoSub:"Este es tu enlace privado. También lo enviamos al correo de tu PayPal.",
+      jugar:"Jugar ahora",
+      guarda:"Guarda este enlace — sirve siempre y desde cualquier dispositivo.",
+    },
   },
 };
 
@@ -858,33 +891,101 @@ const PROD_DESC_ES:Record<string,string> = {
   "Interactive Stellar Dash":"Un runner espacial arcade a toda velocidad donde el chat en vivo controla el caos. Los viewers activan obstáculos, ataques y cambios de dificultad en tiempo real — convirtiendo cada partida en una batalla impredecible por sobrevivir, hecha para streamers.",
 };
 
-function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang,setLang,isOwner,t}:any) {
+// ─── SHARED NEON CHROME (nav / footer / product card) ─────────────────────────
+function ProductCard({p,i,lang,addToCart,L}:any){
+  return (
+    <article className="card reveal" data-accent={ACCENTS[i%ACCENTS.length]} id={"p"+p.id}>
+      <div className="card-media">
+        <span className="card-price">${p.price}</span>
+        {p.type==="digital"&&<span className="card-badge">Digital</span>}
+        {p.img?<img src={p.img} alt={p.name} loading="lazy"/>:<span className="card-emoji">{p.emoji}</span>}
+      </div>
+      <div className="card-body">
+        <h3 className="card-title">{p.name}</h3>
+        <p className="card-desc">{lang==="es" ? (PROD_DESC_ES[p.name]||p.desc) : p.desc}</p>
+        {p.stock<15&&<span className="stock-low">{L.onlyLeft} {p.stock} {L.left}</span>}
+        <div className="card-foot">
+          <button className="btn-add" onClick={()=>addToCart(p)}>{L.addToCart}</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function NeonNav({lang,setLang,cartCount,onCart,onHome,onProps,onGames,onFaq,solid}:any){
+  const [menuOpen,setMenuOpen]=useState(false);
+  return (
+    <header className={"nav"+(solid?" scrolled":"")}>
+      <button className="brand" onClick={onHome}>
+        <img src="/landing/logo.png" alt="Interactive Props" className="brand-logo"/>
+        <span className="brand-name">INTERACTIVE&nbsp;<span className="brand-name-2">PROPS</span></span>
+      </button>
+      <nav className="nav-links">
+        <a onClick={onProps}>Props</a>
+        <a onClick={onGames}>Games</a>
+        <a onClick={onFaq}>FAQ</a>
+      </nav>
+      <div className="nav-tools">
+        <div className="lang-toggle">
+          <button className={lang==="en"?"on":""} onClick={()=>setLang("en")}>EN</button>
+          <button className={lang==="es"?"on":""} onClick={()=>setLang("es")}>ES</button>
+        </div>
+        <button className="nav-icon" aria-label="Cart" onClick={onCart}>
+          🛒{cartCount>0&&<span className="cart-count">{cartCount}</span>}
+        </button>
+        <button className={"nav-burger"+(menuOpen?" is-open":"")} aria-label="Menu" aria-expanded={menuOpen} onClick={()=>setMenuOpen((o:boolean)=>!o)}>
+          <span/><span/><span/>
+        </button>
+      </div>
+      <nav className="mobile-menu" hidden={!menuOpen}>
+        <a onClick={()=>{onProps();setMenuOpen(false);}}>Props</a>
+        <a onClick={()=>{onGames();setMenuOpen(false);}}>Games</a>
+        <a onClick={()=>{onFaq();setMenuOpen(false);}}>FAQ</a>
+      </nav>
+    </header>
+  );
+}
+
+function NeonFooter({L,products,onProductsLink,onHow,onFaq,onPolicy}:any){
+  return (
+    <footer className="footer">
+      <div className="wrap foot-grid">
+        <div className="foot-brand">
+          <img src="/landing/logo.png" alt="Interactive Props" className="foot-logo"/>
+          <p>{L.footBlurb}</p>
+        </div>
+        <div className="foot-col">
+          <h5>{L.footProducts}</h5>
+          {products.slice(0,4).map((p:any)=>(<a key={p.id} onClick={onProductsLink}>{p.name}</a>))}
+        </div>
+        <div className="foot-col">
+          <h5>{L.footCompany}</h5>
+          <a onClick={onHow}>{L.footHow}</a>
+          <a onClick={onFaq}>{L.footFaq}</a>
+          <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
+        </div>
+        <div className="foot-col">
+          <h5>{L.footSupport}</h5>
+          <a onClick={()=>onPolicy("shipping")}>{L.footShip}</a>
+          <a onClick={()=>onPolicy("returns")}>{L.footRet}</a>
+          <a onClick={()=>onPolicy("warranty")}>{L.footWar}</a>
+          <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
+        </div>
+      </div>
+      <div className="wrap foot-bottom">
+        <span className="foot-legal">Interactive Props is owned and operated by <b>Veronica Aime Rey, sole proprietor</b>.</span>
+        <span className="foot-mail">© <span>{new Date().getFullYear()}</span> · interactiveprops.official@gmail.com</span>
+      </div>
+    </footer>
+  );
+}
+
+// ─── LANDING (v4 neon single page) ─────────────────────────────────────────────
+function LandingView({products,lang,setLang,addToCart,cartCount,setCartOpen,goProducts,goFaq,goPolicy}:any) {
   const rootRef = useRef<HTMLDivElement>(null);
   const lenisRef = useRef<any>(null);
-  const [cart,setCart] = useState<any[]>([]);
-  const [cartOpen,setCartOpen] = useState(false);
-  const [checkoutOpen,setCheckoutOpen] = useState(false);
-  const [toast,setToast] = useState<string|null>(null);
-  const [openFaq,setOpenFaq] = useState<number>(-1);
-
-  const cartCount = cart.reduce((s:number,i:any)=>s+i.qty,0);
-  const cartTotal = cart.reduce((s:number,i:any)=>s+i.price*i.qty,0);
-  const showcase = products.filter((p:any)=>p.active!==false);
   const L = LT[lang] || LT.en;
-
-  function showToast(msg:string){ setToast(msg); setTimeout(()=>setToast(null),2400); }
-  function addToCart(p:any){
-    setCart(prev=>{ const ex=prev.find(i=>i.id===p.id); return ex?prev.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i):[...prev,{...p,qty:1}]; });
-    showToast(p.name+" added to cart");
-  }
-  function handleOrderComplete(orderData:any,shipping:any,signText:string,finalTotal:number){
-    const extraLetters=signText?Math.max(0,signText.replace(/ /g,"").length-8):0;
-    const extraCost=extraLetters*3;
-    const orderId="ORD-"+Date.now(), orderDate=new Date().toISOString();
-    addOrder({id:orderId,date:orderDate,items:cart,total:finalTotal,shipping,signText:signText||null,signExtraCost:extraCost>0?extraCost:null,paypal:orderData,status:"paid"});
-    fetch("https://hook.us2.make.com/mbkm6kji0gsdnebf7wnoa9wojox2yo9h",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"order.completed",order_id:orderId,date:orderDate,customer:{name:shipping.name,email:shipping.email,phone:shipping.phone||""},shipping:{address:shipping.address||"",city:shipping.city||"",state:shipping.state||"",zip:shipping.zip||"",country:shipping.country||"US"},items:cart.map((i:any)=>({id:i.id,name:i.name,price:i.price,quantity:i.qty,type:i.type})),sign_text:signText||null,sign_extra_cost:extraCost>0?extraCost:null,subtotal:cartTotal,total:finalTotal,payment_method:"PayPal"})}).catch(e=>console.log("Webhook:",e));
-    setCart([]); setCheckoutOpen(false); showToast("Order complete! Thank you.");
-  }
+  const featured = products.filter((p:any)=>p.category==="Props");
 
   // Smooth-scroll to an in-page section id
   function goTo(id:string){
@@ -893,73 +994,17 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
     else if(el) el.scrollIntoView({behavior:"smooth"});
   }
 
-  // Canvas frame-scrub + Lenis + reveal + stat counters
+  // Lenis smooth-scroll + scroll reveals + stat counters + nav scrolled state
   useEffect(()=>{
     const root=rootRef.current; if(!root) return;
-    const section=root.querySelector("#hero") as HTMLElement|null;
-    const canvas=root.querySelector("#hero-canvas") as HTMLCanvasElement|null;
-    const bar=root.querySelector("#progress-fill") as HTMLElement|null;
     const nav=root.querySelector(".nav") as HTMLElement|null;
-    const hint=root.querySelector("#scroll-hint") as HTMLElement|null;
-    let rafId=0, current=-1, firstDrawn=false;
-    const images:HTMLImageElement[]=[];
-    let ctx:CanvasRenderingContext2D|null=null;
-    const lines= section ? [...section.querySelectorAll(".reveal-line")] as HTMLElement[] : [];
-
-    function draw(index:number){
-      if(!canvas||!ctx) return;
-      const img=images[index]; if(!img||!img.complete||!img.naturalWidth) return;
-      const cw=canvas.clientWidth, ch=canvas.clientHeight;
-      // Pequeño aire arriba (para no chocar de lleno con la nav) — el resto lo
-      // cubre la imagen, anclada debajo de ese margen y recortada por abajo.
-      const inset=Math.min(24, ch*0.03);
-      const availH=ch-inset;
-      const scale=Math.max(cw/img.naturalWidth, availH/img.naturalHeight);
-      const dw=img.naturalWidth*scale, dh=img.naturalHeight*scale;
-      const dx=(cw-dw)/2, dy=inset;
-      ctx.fillStyle="#07040f"; ctx.fillRect(0,0,cw,ch);
-      ctx.drawImage(img,dx,dy,dw,dh);
-    }
-    function resize(){
-      if(!canvas) return;
-      ctx=canvas.getContext("2d",{alpha:false});
-      const dpr=Math.min(window.devicePixelRatio||1,2);
-      canvas.width=canvas.clientWidth*dpr; canvas.height=canvas.clientHeight*dpr;
-      ctx?.setTransform(dpr,0,0,dpr,0,0);
-      draw(current<0?0:current);
-    }
-    function update(){
-      if(!section) return;
-      const rect=section.getBoundingClientRect();
-      if(rect.bottom<-window.innerHeight||rect.top>window.innerHeight) return;
-      const scrollable=rect.height-window.innerHeight;
-      const p=Math.min(Math.max(-rect.top/scrollable,0),1);
-      const idx=Math.min(HERO_FRAME_COUNT-1,Math.floor(p*(HERO_FRAME_COUNT-1)));
-      if(idx!==current){ current=idx; draw(idx); }
-      if(bar) bar.style.width=(p*100).toFixed(2)+"%";
-      for(const el of lines){
-        const a=parseFloat(el.dataset.in||"0"), b=parseFloat(el.dataset.out||"1");
-        const mid=(a+b)/2, half=(b-a)/2;
-        let o=1-Math.abs(p-mid)/half; o=Math.max(0,Math.min(1,o));
-        el.style.opacity=o.toFixed(3);
-        el.style.transform=`translateX(-50%) translateY(${(1-o)*26}px)`;
-      }
-    }
-
-    // preload frames
-    for(let i=0;i<HERO_FRAME_COUNT;i++){
-      const img=new Image(); img.src=heroFramePath(i+1);
-      img.onload=()=>{ if(!firstDrawn){ firstDrawn=true; draw(0); } };
-      images[i]=img;
-    }
-    window.addEventListener("resize",resize); resize();
+    let rafId=0;
 
     const lenis=new Lenis({lerp:0.09,smoothWheel:true}); lenisRef.current=lenis; (window as any).__lenis=lenis;
-    function raf(time:number){ lenis.raf(time); update(); rafId=requestAnimationFrame(raf); }
+    function raf(time:number){ lenis.raf(time); rafId=requestAnimationFrame(raf); }
     rafId=requestAnimationFrame(raf);
     lenis.on("scroll",({scroll}:any)=>{
       if(nav) nav.classList.toggle("scrolled",scroll>40);
-      if(hint) hint.style.opacity=scroll>60?"0":"1";
     });
 
     const io=new IntersectionObserver((entries)=>{
@@ -980,73 +1025,64 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
     },{threshold:0.2,rootMargin:"0px 0px -8% 0px"});
     root.querySelectorAll(".reveal, .stat-num").forEach(el=>io.observe(el));
 
-    return ()=>{ cancelAnimationFrame(rafId); window.removeEventListener("resize",resize); io.disconnect(); lenis.destroy(); lenisRef.current=null; };
+    return ()=>{ cancelAnimationFrame(rafId); io.disconnect(); lenis.destroy(); lenisRef.current=null; };
   },[]);
+
+  // Neon trigger icons for the auto-scrolling "Triggered by what your chat does" bar
+  const triggers = [
+    {c:"#ff3ea5", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M3 12h18M12 8v13M12 8S9.5 3.5 7.5 5s1 3 4.5 3M12 8s2.5-4.5 4.5-3-1 3-4.5 3"/></svg>},
+    {c:"#35e0a1", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.2C14 8.4 13 8 12 8c-1.4 0-2.5.8-2.5 2s1.1 1.7 2.5 2 2.5.9 2.5 2-1.1 2-2.5 2c-1 0-2-.4-2.5-1.2M12 6.5v11"/></svg>},
+    {c:"#a855f7", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M4 8l3.5 3L12 5l4.5 6L20 8l-1.5 10h-13z"/></svg>},
+    {c:"#ff8a3d", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 15V10a6 6 0 1 0-12 0v5l-2 3h16z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>},
+    {c:"#2bd4ff", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 10a3 3 0 1 1 4 2.8L11 16"/><path d="M15 12a3 3 0 1 1-1 5.8H10"/><path d="M8.5 13.5A3 3 0 1 1 6 19"/></svg>},
+    {c:"#4ade80", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 3 1-6.1L3.2 9.5l6.1-.9z"/></svg>},
+    {c:"#ff5c8a", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>},
+    {c:"#5b8cff", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M13 3L5 13h5l-1 8 8-11h-5z"/></svg>},
+  ];
 
   return (
     <div className="ip-landing" ref={rootRef}>
-      {/* NAV */}
-      <header className="nav">
-        <button className="brand" onClick={()=>goTo("#top")}>
-          <img src="/landing/logo.png" alt="Interactive Props" className="brand-logo"/>
-          <span className="brand-name">INTERACTIVE<span className="brand-name-2">PROPS</span></span>
-        </button>
-        <nav className="nav-links">
-          <a onClick={()=>goTo("#products")}>{L.navProducts}</a>
-          <a onClick={()=>goTo("#how")}>{L.navHow}</a>
-          <a onClick={()=>goTo("#platforms")}>{L.navPlatforms}</a>
-          <a onClick={()=>goTo("#faq")}>{L.navFaq}</a>
-          <a onClick={()=>goTo("#contact")}>{L.navContact}</a>
-        </nav>
-        <div className="nav-tools">
-          <div className="lang-toggle">
-            <button className={lang==="en"?"on":""} onClick={()=>setLang("en")}>EN</button>
-            <button className={lang==="es"?"on":""} onClick={()=>setLang("es")}>ES</button>
-          </div>
-          <button className="nav-icon" aria-label="Cart" onClick={()=>setCartOpen(true)}>
-            🛒{cartCount>0&&<span className="cart-count">{cartCount}</span>}
-          </button>
-          <button className="nav-icon" aria-label={isOwner?"Admin":"Owner login"} onClick={()=>setView(isOwner?"admin":"login")}>{isOwner?"⚙️":"👤"}</button>
-        </div>
-      </header>
+      {/* NAV (shared neon chrome) */}
+      <NeonNav lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={()=>goTo("#top")} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
 
       <span id="top"/>
 
-      {/* HERO — scroll-scrubbed cinematic */}
-      <section className="cinematic" id="hero">
-        <div className="sticky">
-          <canvas id="hero-canvas"/>
-          <div className="hero-vignette"/>
+      {/* HERO — static full-bleed image with floating neon chips */}
+      <section className="hero" id="hero">
+        <div className="hero-media"><img src="/landing/hero.jpg" alt="The Interactive Props lineup on a neon streaming desk"/></div>
+        <div className="hero-scrim"/>
+        <div className="hero-badges" aria-hidden="true">
+          <span className="chip chip-gift"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M3 12h18M12 8v13M12 8S9.5 3.5 7.5 5s1 3 4.5 3M12 8s2.5-4.5 4.5-3-1 3-4.5 3"/></svg>GIFT</span>
+          <span className="chip chip-webhook"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M9 10a3 3 0 1 1 4 2.8L11 16"/><path d="M15 12a3 3 0 1 1-1 5.8H10"/><path d="M8.5 13.5A3 3 0 1 1 6 19"/></svg>WEBHOOK</span>
+          <span className="chip chip-alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M18 15V10a6 6 0 1 0-12 0v5l-2 3h16z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>ALERT</span>
+          <span className="chip chip-sub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 3 1-6.1L3.2 9.5l6.1-.9z"/></svg>SUB</span>
+        </div>
+        <div className="hero-inner wrap">
           <div className="hero-copy">
-            <h2 className="hero-line reveal-line" data-in="0.50" data-out="0.74">GIFTS. ALERTS. <span className="grad">WEBHOOKS.</span></h2>
-            <h2 className="hero-line reveal-line" data-in="0.78" data-out="1.00">REAL PROPS. <span className="grad">REAL CHAOS.</span></h2>
+            <h1 className="hero-title reveal">{L.heroTitleA}<span className="grad-word">{L.heroTitleWord}</span></h1>
+            <p className="hero-lead reveal">{L.heroLead}</p>
+            <div className="hero-cta reveal">
+              <button className="btn btn-solid" onClick={()=>goTo("#products")}>{L.heroBtn1} <span className="arw">→</span></button>
+              <button className="btn btn-ghost" onClick={()=>goTo("#how")}>{L.heroBtn2} <span className="tri">▶</span></button>
+            </div>
           </div>
-          <div className="hero-tag tl">{L.tagL}</div>
-          <div className="hero-tag tr">{L.tagR}</div>
-          <div className="progress"><div className="progress-fill" id="progress-fill"/></div>
-          <div className="scroll-hint" id="scroll-hint">{L.scroll}&nbsp;▾</div>
         </div>
       </section>
 
-      {/* MARQUEE */}
-      <div className="marquee" aria-hidden="true">
-        <div className="marquee-track">
-          {[0,1].map(rep=>(
-            <span key={rep} style={{display:"inline-flex",alignItems:"center",gap:26}}>
-              {L.marquee.map((w:string,wi:number)=>(<span key={wi} style={{display:"inline-flex",alignItems:"center",gap:26}}><span>{w}</span><i>✦</i></span>))}
-            </span>
-          ))}
+      {/* TRIGGERS STRIP — label + auto-scrolling neon icon bar */}
+      <div className="triggers-wrap wrap">
+        <p className="triggers-label reveal">{L.triggersLabel}</p>
+        <div className="triggers reveal">
+          <div className="marquee">
+            {[0,1].flatMap(rep=>triggers.map((tg:any,i:number)=>(
+              <span className="trig" style={{"--c":tg.c} as any} key={rep+"-"+i}>
+                <span className="t-ic">{tg.icon}</span>{L.triggerNames[i]}
+              </span>
+            )))}
+          </div>
         </div>
       </div>
-
-      {/* INTRO */}
-      <section className="intro" id="about">
-        <div className="wrap">
-          <p className="kicker reveal">{L.introKicker}</p>
-          <h2 className="intro-head reveal">{L.introHeadA}<br/><span className="grad">{L.introHeadB}</span></h2>
-          <p className="intro-sub reveal">{L.introSub}</p>
-        </div>
-      </section>
 
       {/* HOW IT WORKS */}
       <section className="how" id="how">
@@ -1058,38 +1094,34 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
           </div>
           <div className="steps">
             {L.steps.map((s:any,i:number)=>(
-              <article className="step reveal" key={i}><div className="step-num">{String(i+1).padStart(2,"0")}</div><h3>{s.h}</h3><p>{s.p}</p><div className="step-tags">{s.tags.map((tg:string,ti:number)=><span key={ti}>{tg}</span>)}</div></article>
+              <article className="step reveal" key={i}>
+                <div className="step-card">
+                  <span className="step-num">{i+1}</span>
+                  <div className="step-img"><img src={["/landing/hiw-viewer.jpg","/landing/hiw-trigger.jpg","/landing/hiw-prop.jpg"][i]} alt={s.h} loading="lazy"/></div>
+                  <h3 className="step-cap">{s.h}</h3>
+                  <p className="step-sub">{s.p}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PRODUCTS — wired to real cart */}
+      {/* FEATURED PRODUCTS — wired to shared cart */}
       <section className="products" id="products">
         <div className="wrap">
           <div className="sec-head reveal">
-            <p className="kicker">{L.prodKicker}</p>
-            <h2 className="sec-title">{L.prodTitleA}<span className="grad">{L.prodTitleMid}</span></h2>
+            <p className="kicker">{L.featuredKicker}</p>
+            <h2 className="sec-title">{L.featuredTitleA}<span className="grad">{L.featuredTitleWord}</span></h2>
             <p className="sec-desc">{L.prodDesc}</p>
           </div>
           <div className="grid">
-            {showcase.map((p:any,i:number)=>(
-              <article className="card reveal" data-accent={ACCENTS[i%ACCENTS.length]} id={"p"+p.id} key={p.id}>
-                <div className="card-media">
-                  <span className="card-price">${p.price}</span>
-                  {p.type==="digital"&&<span className="card-badge">Digital</span>}
-                  {p.img?<img src={p.img} alt={p.name} loading="lazy"/>:<span className="card-emoji">{p.emoji}</span>}
-                </div>
-                <div className="card-body">
-                  <h3 className="card-title">{p.name}</h3>
-                  <p className="card-desc">{lang==="es" ? (PROD_DESC_ES[p.name]||p.desc) : p.desc}</p>
-                  {p.stock<15&&<span className="stock-low">{L.onlyLeft} {p.stock} {L.left}</span>}
-                  <div className="card-foot">
-                    <button className="btn-add" onClick={()=>addToCart(p)}>{L.addToCart}</button>
-                  </div>
-                </div>
-              </article>
+            {featured.map((p:any,i:number)=>(
+              <ProductCard key={p.id} p={p} i={i} lang={lang} addToCart={addToCart} L={L}/>
             ))}
+          </div>
+          <div className="view-all reveal">
+            <button className="btn btn-ghost" onClick={()=>goProducts("props")}>{L.viewAll} <span className="arw">→</span></button>
           </div>
         </div>
       </section>
@@ -1110,22 +1142,6 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* PLATFORMS */}
-      <section className="platforms" id="platforms">
-        <div className="wrap">
-          <div className="sec-head reveal">
-            <p className="kicker">{L.platKicker}</p>
-            <h2 className="sec-title">{L.platTitleA}<span className="grad">{L.platTitleMid}</span></h2>
-            <p className="sec-desc">{L.platDesc}</p>
-          </div>
-          <div className="plat-grid">
-            {L.plats.map((pl:any,i:number)=>(
-              <div className="plat reveal" key={i}><span className="plat-name">{pl.name}</span><span className="plat-sub">{pl.sub}</span></div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* STATS */}
       <section className="stats">
         <div className="wrap stat-row">
@@ -1136,14 +1152,119 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="faq" id="faq">
-        <div className="wrap faq-wrap">
-          <div className="sec-head reveal">
+      {/* CTA BANNER */}
+      <section className="cta" id="contact">
+        <div className="cta-media"><img src="/landing/banner.jpg" alt="" aria-hidden="true"/></div>
+        <div className="cta-scrim"/>
+        <div className="wrap cta-inner reveal">
+          <h2 className="cta-title">{L.ctaTitle}</h2>
+          <p className="cta-sub-line">{L.ctaSubA}<span className="grad-word">{L.ctaSubWord}</span></p>
+          <div className="hero-cta cta-btns">
+            <button className="btn btn-solid" onClick={()=>goTo("#products")}>{L.heroBtn1} <span className="arw">→</span></button>
+            <button className="btn btn-ghost" onClick={()=>goTo("#how")}>{L.heroBtn2} <span className="tri">▶</span></button>
+          </div>
+          <p className="cta-mail">{L.ctaMailQ} <a href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a></p>
+        </div>
+      </section>
+
+      {/* FOOTER (shared neon chrome) */}
+      <NeonFooter L={L} products={featured} onProductsLink={()=>goProducts("props")}
+        onHow={()=>goTo("#how")} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
+// ─── PRODUCTS PAGE (neon, Props / Games tabs) ─────────────────────────────────
+function ProductsPage({products,lang,setLang,addToCart,cartCount,setCartOpen,tab,setTab,goHome,goProducts,goFaq,goPolicy,goJuego}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const L = LT[lang] || LT.en;
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    const root=rootRef.current; if(!root) return;
+    const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }),{threshold:0.12,rootMargin:"0px 0px -6% 0px"});
+    root.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+    return ()=>io.disconnect();
+  },[tab]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>setTab("props")} onGames={()=>setTab("games")} onFaq={goFaq}/>
+
+      <section className="page-head">
+        <div className="wrap">
+          <p className="page-eyebrow">{L.prodPageEyebrow}</p>
+          <h1 className="page-title">{L.prodPageTitleA}<span className="grad-word">{L.prodPageTitleWord}</span></h1>
+          <p className="page-sub">{L.prodPageSub}</p>
+          <div className="cat-tabs" role="tablist">
+            <button className={"cat-tab"+(tab==="props"?" is-active":"")} role="tab" aria-selected={tab==="props"} onClick={()=>setTab("props")}>Props</button>
+            <button className={"cat-tab"+(tab==="games"?" is-active":"")} role="tab" aria-selected={tab==="games"} onClick={()=>setTab("games")}>Games</button>
+          </div>
+        </div>
+      </section>
+
+      <section className="products page-products">
+        <div className="wrap">
+          {tab==="props"
+            ?<div className="grid">
+               {props.map((p:any,i:number)=>(
+                 <ProductCard key={p.id} p={p} i={i} lang={lang} addToCart={addToCart} L={L}/>
+               ))}
+             </div>
+            :<div className="grid">
+               <article className="card juego-card reveal" data-accent="pink" onClick={goJuego}
+                 role="link" tabIndex={0} onKeyDown={(e)=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); goJuego(); } }}>
+                 <div className="card-media juego-card-media">
+                   <span className="card-price">${JUEGO_PRECIO}</span>
+                   <span className="card-badge">{L.juego.badge}</span>
+                   <img src="/landing/juego-cover.webp" alt="Donut Bridge" loading="lazy"/>
+                 </div>
+                 <div className="card-body">
+                   <h3 className="card-title">Donut Bridge</h3>
+                   <p className="card-desc">{L.juego.desc}</p>
+                   <div className="card-foot">
+                     <span className="btn-add">{L.juego.verJuego} <span className="arw">→</span></span>
+                   </div>
+                 </div>
+               </article>
+             </div>
+          }
+        </div>
+      </section>
+
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
+// ─── FAQ PAGE (neon accordion) ────────────────────────────────────────────────
+function FaqPage({products,lang,setLang,cartCount,setCartOpen,goHome,goProducts,goFaq,goPolicy}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [openFaq,setOpenFaq] = useState<number>(-1);
+  const L = LT[lang] || LT.en;
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    const root=rootRef.current; if(!root) return;
+    const io=new IntersectionObserver((es)=>es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); } }),{threshold:0.12,rootMargin:"0px 0px -6% 0px"});
+    root.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+    return ()=>io.disconnect();
+  },[]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
+
+      <section className="faq page-faq" id="faq">
+        <div className="wrap">
+          <div className="sec-head center reveal">
             <p className="kicker">{L.faqKicker}</p>
             <h2 className="sec-title">{L.faqTitleA}<span className="grad">{L.faqTitleMid}</span></h2>
           </div>
-          <div className="faq-list">
+          <div className="faq-list faq-page-list">
             {L.faq.map((item:any,i:number)=>(
               <details className="qa reveal" key={i} open={openFaq===i}>
                 <summary onClick={(e)=>{e.preventDefault();setOpenFaq(openFaq===i?-1:i);}}>{item.q}<i/></summary>
@@ -1154,62 +1275,197 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         </div>
       </section>
 
-      {/* POLICIES */}
-      <section className="policies">
-        <div className="wrap">
-          <div className="pol-grid">
-            <div className="pol reveal" onClick={()=>{setView("shipping");window.scrollTo(0,0);}}><h4>{L.polShipTitle}</h4><p>{L.polShip}</p></div>
-            <div className="pol reveal" onClick={()=>{setView("returns");window.scrollTo(0,0);}}><h4>{L.polRetTitle}</h4><p>{L.polRet}</p></div>
-            <div className="pol reveal" onClick={()=>{setView("warranty");window.scrollTo(0,0);}}><h4>{L.polWarTitle}</h4><p>{L.polWar}</p></div>
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
+
+// ─── COMPRA DEL JUEGO (Donut Bridge) ──────────────────────────────────────────
+// Ruta /comprar-donut-bridge. Aqui aterriza quien intenta abrir /juego sin
+// licencia. El pago NO crea la licencia desde el navegador: solo manda el id de
+// la orden a /api/comprar, que lo verifica contra PayPal con el secreto del
+// servidor. Ese enlace es la llave del comprador, para siempre.
+const JUEGO_PRECIO = "9.99";
+
+function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHome,goProducts,goFaq,goPolicy}:any) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [enlace,setEnlace] = useState<string|null>(null);
+  const [error,setError] = useState<string|null>(null);
+  const [procesando,setProcesando] = useState(false);
+  const [entornoServidor,setEntornoServidor] = useState<string|null>(null);
+  const L = LT[lang] || LT.en;
+  const G = L.juego;
+
+  // ── Cinturón de seguridad ──────────────────────────────────────────────────
+  // El navegador usa VITE_PAYPAL_CLIENT_ID; el servidor usa PAYPAL_ENTORNO. Si
+  // no coinciden (p. ej. la variable del navegador quedo sin poner y cae al
+  // client-id de produccion mientras el servidor esta en sandbox), un pago de
+  // "prueba" cobraria dinero REAL y ademas la licencia nunca se emitiria.
+  // Preguntamos el entorno al servidor y, si hay desajuste, NO pintamos botones.
+  const clientIdDelEntorno = !!import.meta.env.VITE_PAYPAL_CLIENT_ID;
+  const desajustePayPal = entornoServidor === "sandbox" && !clientIdDelEntorno;
+
+  useEffect(()=>{
+    fetch("/api/comprar").then(r=>r.json())
+      .then(j=>setEntornoServidor(j?.entorno||"desconocido"))
+      .catch(()=>setEntornoServidor("desconocido"));
+  },[]);
+  const props = products.filter((p:any)=>p.active!==false && p.category==="Props");
+
+  useEffect(()=>{
+    if(!paypalLoaded || enlace || desajustePayPal || !entornoServidor) return;
+    const cont=document.getElementById("paypal-juego-container");
+    if(!cont || cont.childNodes.length>0) return;
+    (window as any).paypal.Buttons({
+      createOrder:(_d:any,actions:any)=>actions.order.create({
+        purchase_units:[{description:"Donut Bridge",amount:{value:JUEGO_PRECIO,currency_code:"USD"}}]
+      }),
+      onApprove:async(data:any)=>{
+        setProcesando(true); setError(null);
+        try{
+          const r=await fetch("/api/comprar",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({idOrden:data.orderID})});
+          const j=await r.json();
+          if(j.error) setError(j.error); else setEnlace(j.enlace);
+        }catch(e){ setError(G.errorRed); }
+        finally{ setProcesando(false); }
+      },
+      onError:()=>setError(G.errorPago),
+      style:{layout:"vertical",color:"black",shape:"rect",label:"pay"}
+    }).render("#paypal-juego-container");
+  },[paypalLoaded,enlace,desajustePayPal,entornoServidor]);
+
+  return (
+    <div className="ip-landing" ref={rootRef}>
+      <NeonNav solid lang={lang} setLang={setLang} cartCount={cartCount} onCart={()=>setCartOpen(true)}
+        onHome={goHome} onProps={()=>goProducts("props")} onGames={()=>goProducts("games")} onFaq={goFaq}/>
+
+      <section className="juego-page">
+        <div className="wrap juego-grid">
+          <div className="juego-media">
+            <img src="/landing/juego-cover.webp" alt="Donut Bridge" />
+          </div>
+          <div className="juego-info">
+            <p className="page-eyebrow">{G.eyebrow}</p>
+            <h1 className="juego-title">Donut <span className="grad-word">Bridge</span></h1>
+            <p className="juego-desc">{G.desc}</p>
+            <ul className="juego-list">
+              {G.bullets.map((b:string,i:number)=><li key={i}>{b}</li>)}
+            </ul>
+
+            {enlace ? (
+              <div className="juego-ok">
+                <div className="juego-ok-badge">✅</div>
+                <h3>{G.listoTitulo}</h3>
+                <p>{G.listoSub}</p>
+                <a className="juego-enlace" href={enlace}>{enlace}</a>
+                <a className="btn btn-solid juego-jugar" href={enlace}>{G.jugar} <span className="arw">→</span></a>
+                <p className="juego-fine">{G.guarda}</p>
+              </div>
+            ) : (
+              <div className="juego-compra">
+                <div className="juego-precio"><span>${JUEGO_PRECIO}</span><small>{G.pagoUnico}</small></div>
+                {desajustePayPal ? (
+                  <div className="juego-aviso">
+                    <strong>⚠️ {G.desajusteTitulo}</strong>
+                    <p>{G.desajusteBody}</p>
+                  </div>
+                ) : (
+                  <>
+                    {procesando && <p className="juego-fine">{G.procesando}</p>}
+                    {error && <p className="juego-error">{error}</p>}
+                    <div id="paypal-juego-container"/>
+                    {(!paypalLoaded || !entornoServidor) && <p className="juego-fine">{G.cargando}</p>}
+                    <p className="juego-fine">{G.acceso}</p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="cta" id="contact">
-        <div className="cta-glow"/>
-        <div className="wrap cta-inner reveal">
-          <p className="kicker">{L.ctaKicker}</p>
-          <h2 className="cta-head">{L.ctaHeadA}<span className="grad">{L.ctaHeadMid}</span></h2>
-          <p className="cta-sub">{L.ctaSub}</p>
-          <a className="btn btn-big" href="mailto:interactiveprops.official@gmail.com">interactiveprops.official@gmail.com</a>
-          <p className="cta-fine">{L.ctaFine}</p>
-        </div>
-      </section>
+      <NeonFooter L={L} products={props} onProductsLink={()=>goProducts("props")}
+        onHow={goHome} onFaq={goFaq} onPolicy={goPolicy}/>
+    </div>
+  );
+}
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <div className="wrap foot-grid">
-          <div className="foot-brand">
-            <img src="/landing/logo.png" alt="Interactive Props" className="foot-logo"/>
-            <p>{L.footBlurb}</p>
-          </div>
-          <div className="foot-col">
-            <h5>{L.footProducts}</h5>
-            {showcase.slice(0,4).map((p:any)=>(<a key={p.id} onClick={()=>goTo("#p"+p.id)}>{p.name}</a>))}
-          </div>
-          <div className="foot-col">
-            <h5>{L.footCompany}</h5>
-            <a onClick={()=>goTo("#about")}>{L.footAbout}</a>
-            <a onClick={()=>goTo("#how")}>{L.footHow}</a>
-            <a onClick={()=>goTo("#platforms")}>{L.footPlatforms}</a>
-            <a onClick={()=>goTo("#faq")}>{L.footFaq}</a>
-          </div>
-          <div className="foot-col">
-            <h5>{L.footSupport}</h5>
-            <a onClick={()=>{setView("shipping");window.scrollTo(0,0);}}>{L.footShip}</a>
-            <a onClick={()=>{setView("returns");window.scrollTo(0,0);}}>{L.footRet}</a>
-            <a onClick={()=>{setView("warranty");window.scrollTo(0,0);}}>{L.footWar}</a>
-            <a href="mailto:interactiveprops.official@gmail.com">{L.footContact}</a>
-          </div>
-        </div>
-        <div className="wrap foot-bottom">
-          <span className="foot-legal">Interactive Props is owned and operated by <b>Veronica Aime Rey, sole proprietor</b>.</span>
-          <span className="foot-mail">© <span>{new Date().getFullYear()}</span> · interactiveprops.official@gmail.com</span>
-        </div>
-      </footer>
+// ─── APP ROOT ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [view,setView]=useState("shop");
+  const [products,setProducts]=useState(DEFAULT_PRODUCTS as any[]);
+  const [orders,setOrders]=useState<any[]>([]);
+  const [isOwner,setIsOwner]=useState(false);
+  const [lang,setLang]=useState<"en"|"es">("en");
+  const [productsTab,setProductsTab]=useState<"props"|"games">("props");
+  // ── Cart state lifted to App root so it is shared across every view ──
+  const [cart,setCart]=useState<any[]>([]);
+  const [cartOpen,setCartOpen]=useState(false);
+  const [checkoutOpen,setCheckoutOpen]=useState(false);
+  const [toast,setToast]=useState<string|null>(null);
+  const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
+  const t=TR[lang];
+  // The admin panel has NO entry point in the UI — it is reachable only by
+  // visiting /admin (or #admin), which lands on the password screen.
+  useEffect(()=>{
+    const path=window.location.pathname.replace(/\/+$/,"").toLowerCase();
+    if(path==="/admin"||window.location.hash.toLowerCase()==="#admin") setView("login");
+    // api/juego.js manda aqui a quien intenta abrir el juego sin licencia
+    else if(path==="/comprar-donut-bridge") setView("juego");
+  },[]);
+  // Session comes from Firebase Auth, so a refresh keeps the owner signed in.
+  useEffect(()=>{ onAdminAuth((u:any)=>setIsOwner(!!u)); },[]);
+  useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
+  useEffect(()=>{fsListen("orders",setOrders);},[]);
+  const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
+  const addOrder=useCallback(async(o:any)=>{await saveOrder(o);setOrders(prev=>[o,...prev]);},[]);
 
-      {/* CART DRAWER */}
+  const cartCount=cart.reduce((s:number,i:any)=>s+i.qty,0);
+  const cartTotal=cart.reduce((s:number,i:any)=>s+i.price*i.qty,0);
+  function showToast(msg:string){ setToast(msg); setTimeout(()=>setToast(null),2400); }
+  function addToCart(p:any){
+    setCart(prev=>{ const ex=prev.find(i=>i.id===p.id); return ex?prev.map(i=>i.id===p.id?{...i,qty:i.qty+1}:i):[...prev,{...p,qty:1}]; });
+    showToast(p.name+" added to cart");
+  }
+  function handleOrderComplete(orderData:any,shipping:any,signText:string,finalTotal:number){
+    const extraLetters=signText?Math.max(0,signText.replace(/ /g,"").length-8):0;
+    const extraCost=extraLetters*3;
+    const orderId="ORD-"+Date.now(), orderDate=new Date().toISOString();
+    addOrder({id:orderId,date:orderDate,items:cart,total:finalTotal,shipping,signText:signText||null,signExtraCost:extraCost>0?extraCost:null,paypal:orderData,status:"paid"});
+    fetch("https://hook.us2.make.com/mbkm6kji0gsdnebf7wnoa9wojox2yo9h",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"order.completed",order_id:orderId,date:orderDate,customer:{name:shipping.name,email:shipping.email,phone:shipping.phone||""},shipping:{address:shipping.address||"",city:shipping.city||"",state:shipping.state||"",zip:shipping.zip||"",country:shipping.country||"US"},items:cart.map((i:any)=>({id:i.id,name:i.name,price:i.price,quantity:i.qty,type:i.type})),sign_text:signText||null,sign_extra_cost:extraCost>0?extraCost:null,subtotal:cartTotal,total:finalTotal,payment_method:"PayPal"})}).catch(e=>console.log("Webhook:",e));
+    setCart([]); setCheckoutOpen(false); showToast("Order complete! Thank you.");
+  }
+
+  const goHome=()=>{ setView("shop"); window.scrollTo(0,0); };
+  const goProducts=(tab:"props"|"games")=>{ setProductsTab(tab); setView("products"); window.scrollTo(0,0); };
+  const goFaq=()=>{ setView("faq"); window.scrollTo(0,0); };
+  const goJuego=()=>{ setView("juego"); window.scrollTo(0,0); };
+  const goPolicy=(type:string)=>{ setView(type); window.scrollTo(0,0); };
+
+  const activeProducts=products.filter((p:any)=>p.active);
+  const legacyChrome=!["shop","products","faq","juego"].includes(view);
+
+  return (
+    <div style={{minHeight:"100vh",width:"100%",background:BG,color:T1,fontFamily:"'Rajdhani',sans-serif"}}>
+      <style>{CSS}</style>
+      <div className="scanlines"/>
+      {legacyChrome&&<Header view={view} setView={setView} isOwner={isOwner} setIsOwner={setIsOwner} lang={lang} setLang={setLang} t={t}/>}
+      <div key={view}>
+          {view==="shop"    &&<LandingView products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="products"&&<ProductsPage products={activeProducts} lang={lang} setLang={setLang} addToCart={addToCart} cartCount={cartCount} setCartOpen={setCartOpen} tab={productsTab} setTab={setProductsTab} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy} goJuego={goJuego}/>}
+          {view==="faq"     &&<FaqPage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="juego"   &&<GamePage products={activeProducts} lang={lang} setLang={setLang} cartCount={cartCount} setCartOpen={setCartOpen} paypalLoaded={paypalLoaded} goHome={goHome} goProducts={goProducts} goFaq={goFaq} goPolicy={goPolicy}/>}
+          {view==="about"   &&<AboutView setView={setView} t={t}/>}
+          {view==="contact" &&<ContactView setView={setView} t={t}/>}
+          {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
+          {view==="warranty"&&<PolicyView type="warranty" setView={setView} t={t}/>}
+          {view==="shipping"&&<PolicyView type="shipping" setView={setView} t={t}/>}
+          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} t={t}/>}
+          {view==="admin"&&isOwner&&<AdminView products={products} orders={orders} persistProducts={persistProducts}/>}
+      </div>
+
+      {/* CART DRAWER — shared across every view */}
       <AnimatePresence>
         {cartOpen&&(
           <motion.div className="ip-cart-overlay" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.2}} onClick={()=>setCartOpen(false)}>
@@ -1243,45 +1499,10 @@ function LandingView({products,paypalLoaded,paypalClientId,addOrder,setView,lang
         )}
       </AnimatePresence>
 
-      {checkoutOpen&&<CheckoutModal cart={cart} cartTotal={cartTotal} paypalLoaded={paypalLoaded} paypalClientId={paypalClientId} onClose={()=>setCheckoutOpen(false)} onComplete={handleOrderComplete} t={t}/>}
+      {checkoutOpen&&<CheckoutModal cart={cart} cartTotal={cartTotal} paypalLoaded={paypalLoaded} paypalClientId={PAYPAL_CLIENT_ID} onClose={()=>setCheckoutOpen(false)} onComplete={handleOrderComplete} t={t}/>}
 
       <AnimatePresence>
         {toast&&<motion.div className="ip-toast" initial={{opacity:0,y:16,x:"-50%"}} animate={{opacity:1,y:0,x:"-50%"}} exit={{opacity:0,y:12,x:"-50%"}} transition={{duration:0.25}}>{toast}</motion.div>}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── APP ROOT ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [view,setView]=useState("shop");
-  const [products,setProducts]=useState(DEFAULT_PRODUCTS as any[]);
-  const [orders,setOrders]=useState<any[]>([]);
-  const [isOwner,setIsOwner]=useState(false);
-  const [lang,setLang]=useState<"en"|"es">("en");
-  const paypalLoaded=usePayPal(PAYPAL_CLIENT_ID);
-  const t=TR[lang];
-  useEffect(()=>{loadProducts().then(setProducts);loadOrders().then(setOrders);},[]);
-  useEffect(()=>{fsListen("orders",setOrders);},[]);
-  const persistProducts=useCallback(async(p:any[])=>{setProducts(p);await saveProducts(p);},[]);
-  const addOrder=useCallback(async(o:any)=>{await saveOrder(o);setOrders(prev=>[o,...prev]);},[]);
-  return (
-    <div style={{minHeight:"100vh",width:"100%",background:BG,color:T1,fontFamily:"'Rajdhani',sans-serif"}}>
-      <style>{CSS}</style>
-      <div className="scanlines"/>
-      {view!=="shop"&&<Header view={view} setView={setView} isOwner={isOwner} setIsOwner={setIsOwner} lang={lang} setLang={setLang} t={t}/>}
-      <AnimatePresence mode="wait">
-        <motion.div key={view} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:0.22}}>
-          {view==="shop"    &&<LandingView products={products.filter((p:any)=>p.active)} paypalLoaded={paypalLoaded} paypalClientId={PAYPAL_CLIENT_ID} addOrder={addOrder} setView={setView} lang={lang} setLang={setLang} isOwner={isOwner} t={t}/>}
-          {view==="about"   &&<AboutView setView={setView} t={t}/>}
-          {view==="contact" &&<ContactView setView={setView} t={t}/>}
-          {view==="faq"     &&<FAQView setView={setView} t={t}/>}
-          {view==="returns" &&<PolicyView type="returns" setView={setView} t={t}/>}
-          {view==="warranty"&&<PolicyView type="warranty" setView={setView} t={t}/>}
-          {view==="shipping"&&<PolicyView type="shipping" setView={setView} t={t}/>}
-          {view==="login"   &&<LoginView onLogin={()=>{setIsOwner(true);setView("admin");}} ownerPassword={OWNER_PASSWORD} t={t}/>}
-          {view==="admin"&&isOwner&&<AdminView products={products} orders={orders} persistProducts={persistProducts}/>}
-        </motion.div>
       </AnimatePresence>
     </div>
   );
@@ -1332,13 +1553,11 @@ function Header({view,setView,isOwner,setIsOwner,lang,setLang,t}:any) {
               </motion.button>
             ))}
           </div>
-          {isOwner
-            ?<>
-               <motion.button onClick={()=>setView("admin")} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:view==="admin"?C:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>⚙️</motion.button>
-               <motion.button onClick={()=>{setIsOwner(false);setView("shop");}} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>🚪</motion.button>
-             </>
-            :<motion.button onClick={()=>setView("login")} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>👤</motion.button>
-          }
+          {/* No admin entry point anywhere in the UI — the panel is reached only via /admin.
+              Once signed in, keep a logout so the owner can end the session. */}
+          {isOwner&&(
+            <motion.button onClick={()=>{adminSignOut();setIsOwner(false);setView("shop");}} title="Log out" style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:T3,padding:6}} whileHover={{scale:1.15}} whileTap={{scale:0.9}}>🚪</motion.button>
+          )}
         </div>
       </div>
     </motion.header>

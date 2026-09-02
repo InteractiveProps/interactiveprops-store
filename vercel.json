@@ -1,0 +1,13 @@
+{
+  "rewrites": [
+    { "source": "/juego", "destination": "/api/juego" },
+    { "source": "/juego/:ruta*", "destination": "/api/juego?ruta=:ruta*" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/comprar-donut-bridge", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/juego.js": {
+      "includeFiles": "juego-privado/**"
+    }
+  }
+}
