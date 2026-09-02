@@ -155,6 +155,9 @@
     background:rgba(18,22,29,.72);padding:9px 16px;border-radius:999px
   }
   .card{
+    /* las tarjetas han ido creciendo; si no caben, que se puedan recorrer en
+       vez de quedarse el botón de abajo fuera de pantalla */
+    max-height:calc(100vh - 44px);overflow-y:auto;
     width:min(460px,100%);
     background:var(--ink-soft);
     border:2px solid rgba(255,246,234,.12);
@@ -208,7 +211,7 @@
      una captura y llegar solo. Por eso lleva también la dirección escrita. */
   .qrbox{
     display:flex;align-items:center;gap:12px;justify-content:center;
-    margin:16px auto 0;padding:10px 14px;
+    margin:0 auto 16px;padding:10px 14px;
     background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
     border-radius:14px;width:fit-content;max-width:100%
   }
@@ -227,6 +230,23 @@
     color:rgba(255,246,234,.55);word-break:break-all
   }
   @media (max-height:620px){ .qrbox img{width:78px;height:78px} }
+
+  /* fila del volumen */
+  .volrow{
+    display:flex;align-items:center;gap:11px;margin:0 0 14px;
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);
+    border-radius:12px;padding:9px 14px
+  }
+  .volrow span{
+    font:700 11px/1 'Chivo Mono',ui-monospace,monospace;letter-spacing:.14em;
+    text-transform:uppercase;color:rgba(255,246,234,.6);white-space:nowrap
+  }
+  .volrow b{
+    font:700 12px/1 'Chivo Mono',ui-monospace,monospace;color:var(--cream);
+    min-width:40px;text-align:right
+  }
+  .volrow input{flex:1;min-width:0;height:22px;cursor:pointer;accent-color:var(--glaze)}
+  .volrow input:focus-visible{outline:3px solid var(--player);outline-offset:3px}
 
   .langpick{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
   .langpick button{
@@ -366,6 +386,20 @@
     </div>
 
     <h1 class="logo"><img id="menuLogo" alt="Donut Bridge"></h1>
+    <div class="qrbox">
+      <img id="qrMenu" alt="">
+      <div class="qrtxt">
+        <b data-i18n="qrEscanea">Scan to play</b>
+        <span>interactiveprop.com/games</span>
+      </div>
+    </div>
+
+    <div class="volrow">
+      <span data-i18n="volumen">Volume</span>
+      <input type="range" id="volMenu" min="0" max="100" step="5" value="70" aria-label="Volume">
+      <b id="volMenuVal">70%</b>
+    </div>
+    <button class="btn" id="playBtn" data-i18n="play" style="margin-bottom:18px">Play</button>
 
     <div class="tabs" role="tablist">
       <button class="tab on" id="tabPlay" type="button" role="tab" aria-selected="true" aria-controls="panelPlay" data-i18n="tabPlay">How to play</button>
@@ -396,27 +430,13 @@
         <li><span class="keys"><kbd>Esc</kbd></span><span data-i18n="kPause">Pause</span></li>
       </ul>
     </div>
-
-    <button class="btn" id="playBtn" data-i18n="play">Play</button>
-
-    <div class="qrbox">
-      <img id="qrMenu" alt="">
-      <div class="qrtxt">
-        <b data-i18n="qrEscanea">Scan to play</b>
-        <span>interactiveprop.com/games</span>
-      </div>
-    </div>
   </div>
 </div>
 
 <div class="overlay" id="pauseScreen" hidden>
   <div class="card">
     <p class="eyebrow" id="pauseLvl">Level 1 of 10</p>
-    <h1 data-i18n="paused">On <em>pause</em></h1>
-    <p id="pauseName"></p>
-    <button class="btn" id="resumeBtn" data-i18n="resume">Resume</button>
-    <button class="btn ghost" id="menuBtn" style="margin-top:11px" data-i18n="mainMenu">Main menu</button>
-
+    <p class="gamename"><img id="pauseLogo" alt="Donut Bridge"></p>
     <div class="qrbox">
       <img id="qrPausa" alt="">
       <div class="qrtxt">
@@ -424,6 +444,15 @@
         <span>interactiveprop.com/games</span>
       </div>
     </div>
+    <h1 data-i18n="paused">On <em>pause</em></h1>
+    <p id="pauseName"></p>
+    <div class="volrow">
+      <span data-i18n="volumen">Volume</span>
+      <input type="range" id="volPausa" min="0" max="100" step="5" value="70" aria-label="Volume">
+      <b id="volPausaVal">70%</b>
+    </div>
+    <button class="btn" id="resumeBtn" data-i18n="resume">Resume</button>
+    <button class="btn ghost" id="menuBtn" style="margin-top:11px" data-i18n="mainMenu">Main menu</button>
   </div>
 </div>
 
@@ -431,6 +460,13 @@
   <div class="card">
     <p class="eyebrow" id="winEyebrow"></p>
     <p class="gamename"><img id="winLogo" alt="Donut Bridge"></p>
+    <div class="qrbox">
+      <img id="qrWin" alt="">
+      <div class="qrtxt">
+        <b data-i18n="qrEscanea">Scan to play</b>
+        <span>interactiveprop.com/games</span>
+      </div>
+    </div>
     <h1 id="winTitle" data-i18n="crossed">You crossed <em>the chasm</em></h1>
     <div class="stats">
       <div class="stat"><div class="k" id="winTime">0.0</div><div class="t" data-i18n="statSeconds">Seconds</div></div>
@@ -439,14 +475,6 @@
     </div>
     <button class="btn" id="againBtn">Next level</button>
     <button class="btn ghost" id="retryBtn" style="margin-top:11px" data-i18n="retry">Retry level</button>
-
-    <div class="qrbox">
-      <img id="qrWin" alt="">
-      <div class="qrtxt">
-        <b data-i18n="qrEscanea">Scan to play</b>
-        <span>interactiveprop.com/games</span>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -489,7 +517,7 @@ document.getElementById('winLogo').src = window.LOGO_IMG;
   }
 })();
 </script>
-<script src="game.js?v=c4975e20"></script>
+<script src="game.js?v=0e1fe810"></script>
 
 
 
