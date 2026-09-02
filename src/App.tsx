@@ -529,6 +529,124 @@ function LoginView({onLogin,t}:any) {
   );
 }
 
+// ─── LICENCIAS DEL JUEGO (regalos + revocar) ──────────────────────────────────
+// Regalar el juego = crear una licencia sin pago. El enlace que sale es la llave
+// de esa persona: personal, para siempre, y se puede cortar cuando quieras.
+function LicenciasTab() {
+  const [items,setItems]=useState<any[]>([]);
+  const [nota,setNota]=useState("");
+  const [cargando,setCargando]=useState(true);
+  const [creando,setCreando]=useState(false);
+  const [err,setErr]=useState<string|null>(null);
+  const [nuevo,setNuevo]=useState<string|null>(null);
+  const [copiado,setCopiado]=useState<string|null>(null);
+
+  async function llama(metodo:string, cuerpo?:any){
+    const auth=await getAuth();
+    const user=auth.currentUser;
+    if(!user) throw new Error("Sesión no encontrada. Vuelve a entrar en /admin.");
+    const idToken=await user.getIdToken();
+    const r=await fetch("/api/licencias",{
+      method:metodo,
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+idToken},
+      body:cuerpo?JSON.stringify(cuerpo):undefined
+    });
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||"Error");
+    return j;
+  }
+
+  async function cargar(){
+    setCargando(true); setErr(null);
+    try{ const j=await llama("GET"); setItems(j.items||[]); }
+    catch(e:any){ setErr(e.message); }
+    finally{ setCargando(false); }
+  }
+  useEffect(()=>{ cargar(); },[]);
+
+  async function crear(){
+    setCreando(true); setErr(null); setNuevo(null);
+    try{
+      const j=await llama("POST",{accion:"crear",nota:nota.trim()||"Regalo"});
+      setNuevo(j.enlace); setNota(""); await cargar();
+    }catch(e:any){ setErr(e.message); }
+    finally{ setCreando(false); }
+  }
+
+  async function revocar(token:string, revocada:boolean){
+    setErr(null);
+    try{ await llama("POST",{accion:"revocar",token,revocada}); await cargar(); }
+    catch(e:any){ setErr(e.message); }
+  }
+
+  function copiar(txt:string){
+    navigator.clipboard?.writeText(txt).then(()=>{ setCopiado(txt); setTimeout(()=>setCopiado(null),1800); }).catch(()=>{});
+  }
+
+  const inp:any={padding:"10px 14px",borderRadius:4,border:`1px solid ${BR}`,fontSize:13,outline:"none",width:"100%",background:BG3,color:T1,fontFamily:"'Rajdhani',sans-serif"};
+
+  return (
+    <div>
+      <h2 className="orb" style={{fontSize:20,fontWeight:900,letterSpacing:"0.08em",color:T1,marginBottom:10}}>GAME LICENCES ({items.length})</h2>
+      <p style={{color:T3,fontSize:13,lineHeight:1.7,marginBottom:24,maxWidth:640,fontWeight:500}}>
+        Crea un enlace gratis para un streamer, prensa o soporte. Cada enlace es personal
+        y no caduca. Si se filtra o termina la colaboración, revócalo: deja de funcionar
+        en 24 h como máximo.
+      </p>
+
+      {/* crear */}
+      <div style={{background:BG2,border:`1px solid ${BRC}`,borderRadius:6,padding:"22px 24px",marginBottom:24,maxWidth:640}}>
+        <div className="mono" style={{fontSize:9,letterSpacing:"0.18em",color:C,marginBottom:12}}>NUEVO ENLACE DE REGALO</div>
+        <div style={{display:"flex",gap:10}}>
+          <input style={inp} value={nota} onChange={e=>setNota(e.target.value)}
+            placeholder="¿Para quién? ej. @streamer_tiktok"
+            onKeyDown={e=>{ if(e.key==="Enter") crear(); }}/>
+          <NBtn variant="fill" size="md" onClick={crear}>{creando?"…":"Crear"}</NBtn>
+        </div>
+        {nuevo&&(
+          <div style={{marginTop:16,background:BG3,border:`1px solid ${BRC}`,borderRadius:4,padding:"14px 16px"}}>
+            <div className="mono" style={{fontSize:9,color:T4,letterSpacing:"0.14em",marginBottom:8}}>LISTO — MÁNDASELO</div>
+            <div className="mono" style={{fontSize:12,color:C,wordBreak:"break-all",marginBottom:10}}>{nuevo}</div>
+            <NBtn variant="cyan" size="sm" onClick={()=>copiar(nuevo)}>{copiado===nuevo?"¡Copiado!":"Copiar enlace"}</NBtn>
+          </div>
+        )}
+      </div>
+
+      {err&&<p style={{color:P,fontSize:13,marginBottom:16}}>{err}</p>}
+      {cargando&&<p className="mono" style={{color:T4,fontSize:11}}>Cargando…</p>}
+
+      {/* listado */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {items.map((l:any)=>(
+          <div key={l.token} style={{background:BG2,border:`1px solid ${BR}`,borderRadius:4,padding:"14px 18px",opacity:l.revocada?0.5:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <span className="mono" style={{fontSize:10,fontWeight:700,letterSpacing:"0.08em",
+                background:l.origen==="regalo"?"rgba(255,45,120,0.12)":"rgba(0,212,255,0.10)",
+                color:l.origen==="regalo"?P:C,border:`1px solid ${l.origen==="regalo"?BRP:BRC}`,
+                padding:"3px 10px",borderRadius:20}}>
+                {l.origen==="regalo"?"REGALO":"COMPRA"}
+              </span>
+              <span style={{fontSize:14,color:T1,fontWeight:600}}>{l.nota||l.email||"—"}</span>
+              {l.revocada&&<span className="mono" style={{fontSize:10,color:P,letterSpacing:"0.1em"}}>REVOCADA</span>}
+              <span className="mono" style={{fontSize:10,color:T4,marginLeft:"auto"}}>
+                {l.creada?new Date(l.creada).toLocaleDateString():""}
+              </span>
+            </div>
+            <div className="mono" style={{fontSize:11,color:T3,marginTop:8,wordBreak:"break-all"}}>{l.enlace}</div>
+            <div style={{display:"flex",gap:6,marginTop:10}}>
+              <NBtn variant="ghost" size="sm" onClick={()=>copiar(l.enlace)}>{copiado===l.enlace?"¡Copiado!":"Copiar"}</NBtn>
+              <NBtn variant={l.revocada?"cyan":"pink"} size="sm" onClick={()=>revocar(l.token,!l.revocada)}>
+                {l.revocada?"Restaurar":"Revocar"}
+              </NBtn>
+            </div>
+          </div>
+        ))}
+        {!cargando&&items.length===0&&<p className="mono" style={{color:T4,fontSize:11,letterSpacing:"0.1em"}}>AÚN NO HAY LICENCIAS.</p>}
+      </div>
+    </div>
+  );
+}
+
 function AdminView({products,orders,persistProducts}:any) {
   const [tab,setTab]=useState("products");
   const [editId,setEditId]=useState<any>(null);
@@ -543,7 +661,7 @@ function AdminView({products,orders,persistProducts}:any) {
   function sideActive(id:string){return tab===id||(tab==="add"&&id==="products")||(tab==="edit"&&id==="products");}
   function saveForm(){if(!form.name.trim()||!form.price){st("Name and price required");return;}const updated=editId?products.map((p:any)=>p.id===editId?{...form,price:Number(form.price),stock:Number(form.stock)}:p):[...products,{...form,price:Number(form.price),stock:Number(form.stock)}];persistProducts(updated);setTab("products");setForm(null);setEditId(null);st(editId?"Updated!":"Added!");}
   const inp:any={padding:"10px 14px",borderRadius:4,border:`1px solid ${BR}`,fontSize:13,outline:"none",width:"100%",background:BG3,color:T1,fontFamily:"'Rajdhani',sans-serif",transition:"border-color 0.2s,box-shadow 0.2s"};
-  const tabs=[{id:"products",lbl:"Products"},{id:"orders",lbl:"Orders"},{id:"branding",lbl:"Branding"}];
+  const tabs=[{id:"products",lbl:"Products"},{id:"orders",lbl:"Orders"},{id:"licencias",lbl:"Game licences"},{id:"branding",lbl:"Branding"}];
   return (
     <div style={{display:"flex",minHeight:"calc(100vh - 64px)",background:BG}}>
       <div style={{width:220,background:BG2,borderRight:`1px solid ${BR}`,padding:"32px 0",display:"flex",flexDirection:"column",gap:2,flexShrink:0}}>
@@ -650,6 +768,7 @@ function AdminView({products,orders,persistProducts}:any) {
             }
           </div>
         )}
+        {tab==="licencias"&&<LicenciasTab/>}
         {tab==="branding"&&(
           <div>
             <h2 className="orb" style={{fontSize:20,fontWeight:900,letterSpacing:"0.08em",color:T1,marginBottom:28}}>BRANDING</h2>
