@@ -423,7 +423,11 @@ document.getElementById('winLogo').src = window.LOGO_IMG;
 /* Solo arranca en los dominios de la lista. Es un cerrojo, no una caja fuerte. */
 (function () {
   var ok = ["localhost","127.0.0.1","www.interactiveprop.com","interactiveprop.com"];
-  if (ok.indexOf(location.hostname) < 0) {
+  var h = location.hostname;
+  /* Previews de Vercel de ESTE proyecto (para poder probar antes de publicar).
+     No abre la puerta a cualquier *.vercel.app: exige el nombre del proyecto. */
+  var esPreview = /^interactiveprops-store-[a-z0-9-]+\.vercel\.app$/.test(h);
+  if (ok.indexOf(h) < 0 && !esPreview) {
     document.documentElement.innerHTML =
       '<body style="background:#12161d;color:#fff6ea;font:600 16px system-ui;' +
       'display:grid;place-items:center;height:100vh;margin:0">Copia no autorizada</body>';

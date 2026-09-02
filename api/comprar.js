@@ -122,7 +122,7 @@ export default async function handler(req, res) {
       .where('ordenPayPal', '==', idOrden).limit(1).get();
 
     if (!yaEsta.empty) {
-      res.status(200).json({ enlace: enlaceDe(yaEsta.docs[0].id) });
+      res.status(200).json({ enlace: enlaceDe(yaEsta.docs[0].id, req) });
       return;
     }
 
@@ -157,13 +157,20 @@ export default async function handler(req, res) {
       revocada: false
     });
 
-    res.status(200).json({ enlace: enlaceDe(token), email });
+    res.status(200).json({ enlace: enlaceDe(token, req), email });
   } catch (e) {
     console.error('fallo emitiendo licencia', e);
     res.status(500).json({ error: 'No se pudo emitir la licencia' });
   }
 }
 
-function enlaceDe(token) {
-  return 'https://interactiveprop.com/juego?k=' + token;
+// El enlace se arma con el dominio desde el que se compró. Así una compra hecha
+// en un preview devuelve un enlace de ese preview (si no, apuntaría a
+// interactiveprop.com y daría 404 mientras el juego no esté publicado ahí).
+// En producción sale igual que antes: https://interactiveprop.com/juego?k=...
+function enlaceDe(token, req) {
+  const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host;
+  const proto = req?.headers?.['x-forwarded-proto'] || 'https';
+  const base = host ? proto + '://' + host : 'https://interactiveprop.com';
+  return base + '/juego?k=' + token;
 }
