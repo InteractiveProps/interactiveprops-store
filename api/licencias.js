@@ -38,21 +38,73 @@ async function db() {
   return getFirestore();
 }
 
-// Solo pasa quien trae un token de sesión válido de Firebase Auth.
-// Devuelve el motivo del rechazo: sin él, un fallo de configuración se ve igual
-// que un intento de intrusión y no hay forma de saber qué arreglar.
+// ------------------------------------------------------------------ sesión
+//
+// Verificamos el token de Firebase Auth a mano en vez de usar
+// firebase-admin/auth: ese módulo revienta al importarse aquí con
+// ERR_REQUIRE_ESM (arrastra una dependencia que solo existe como ESM y su build
+// CJS intenta hacerle require). firebase-admin/firestore sí carga bien, así que
+// el resto del archivo lo sigue usando.
+//
+// Un token de Firebase es un JWT firmado por Google. Comprobamos exactamente lo
+// mismo que comprobaría la librería: la FIRMA contra las claves públicas de
+// Google, que no haya caducado, y que venga de tu proyecto (aud/iss). Sin esas
+// cuatro cosas, cualquiera se fabricaría un token.
+
+const CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+let _certs = { pedidas: 0, claves: null };
+
+async function clavesDeGoogle() {
+  // Google rota estas claves; una hora de caché es de sobra y evita pedirlas en
+  // cada llamada.
+  if (_certs.claves && Date.now() - _certs.pedidas < 3600e3) return _certs.claves;
+  const r = await fetch(CERTS_URL);
+  if (!r.ok) throw new Error('no-hay-claves-de-google');
+  _certs = { pedidas: Date.now(), claves: await r.json() };
+  return _certs.claves;
+}
+
+function deBase64Url(s) {
+  return Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
+
+function proyectoId() {
+  return JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT).project_id;
+}
+
 async function esAdmin(req) {
   const cabecera = req.headers.authorization || '';
   const idToken = cabecera.startsWith('Bearer ') ? cabecera.slice(7) : null;
   if (!idToken) return { ok: false, motivo: 'sin-token' };
+
   try {
-    await iniciaApp();
-    const { getAuth } = await import('firebase-admin/auth');
-    const datos = await getAuth().verifyIdToken(idToken);
-    return { ok: true, uid: datos.uid };
+    const partes = idToken.split('.');
+    if (partes.length !== 3) return { ok: false, motivo: 'formato' };
+
+    const cabeceraJwt = JSON.parse(deBase64Url(partes[0]).toString('utf8'));
+    const datos = JSON.parse(deBase64Url(partes[1]).toString('utf8'));
+    if (cabeceraJwt.alg !== 'RS256') return { ok: false, motivo: 'algoritmo' };
+
+    const claves = await clavesDeGoogle();
+    const certificado = claves[cabeceraJwt.kid];
+    if (!certificado) return { ok: false, motivo: 'clave-desconocida' };
+
+    const firmaOk = crypto.createVerify('RSA-SHA256')
+      .update(partes[0] + '.' + partes[1])
+      .verify(certificado, deBase64Url(partes[2]));
+    if (!firmaOk) return { ok: false, motivo: 'firma-invalida' };
+
+    const proyecto = proyectoId();
+    const ahora = Math.floor(Date.now() / 1000);
+    if (!(datos.exp > ahora))                                       return { ok: false, motivo: 'caducado' };
+    if (datos.aud !== proyecto)                                     return { ok: false, motivo: 'otro-proyecto' };
+    if (datos.iss !== 'https://securetoken.google.com/' + proyecto) return { ok: false, motivo: 'emisor' };
+    if (!datos.sub)                                                 return { ok: false, motivo: 'sin-usuario' };
+
+    return { ok: true, uid: datos.sub };
   } catch (e) {
-    const motivo = e?.errorInfo?.code || e?.code || e?.message || 'verificacion-fallida';
-    console.error('licencias: verifyIdToken falló →', motivo);
+    const motivo = e?.message || 'verificacion-fallida';
+    console.error('licencias: verificación falló →', motivo);
     return { ok: false, motivo: String(motivo).slice(0, 120) };
   }
 }
