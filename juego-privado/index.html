@@ -128,6 +128,7 @@
   .keylist li[data-tone="bridge"] kbd{color:#8fd8ff;border-color:rgba(143,216,255,.45)}
   .keylist li[data-tone="magnet"] kbd{color:#8fd8ff;border-color:rgba(143,216,255,.45)}
   .keylist li[data-tone="dance"] kbd{color:#ff8fb4;border-color:rgba(255,143,180,.45)}
+  .keylist li[data-tone="shield"] kbd{color:#9fe8a0;border-color:rgba(159,232,160,.45)}
   .hint{
     font-size:13px;color:rgba(255,246,234,.62);
     background:rgba(18,22,29,.55);padding:6px 16px 4px;border-radius:999px;
@@ -282,6 +283,7 @@
   }
   #buffs .buff.magnet{border-color:rgba(143,216,255,.5);color:#8fd8ff}
   #buffs .buff.dance{border-color:rgba(255,143,180,.5);color:#ff8fb4}
+  #buffs .buff.shield{border-color:rgba(159,232,160,.5);color:#9fe8a0}
   @keyframes buffIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
 
   /* destello rojizo del borde cuando te caes */
@@ -389,6 +391,7 @@
         <li data-tone="bridge"><span class="keys"><kbd>R</kbd></span><span data-i18n="kBridge">Tear the bridge down</span></li>
         <li data-tone="magnet"><span class="keys"><kbd>I</kbd></span><span data-i18n="kMagnet">Magnet: 20 s pulling donuts in (stacks up)</span></li>
         <li data-tone="dance"><span class="keys"><kbd>B</kbd></span><span data-i18n="kDance">Dance: 15 s emote (stacks up, cannot be cut)</span></li>
+        <li data-tone="shield"><span class="keys"><kbd>U</kbd></span><span data-i18n="kShield">Shield: 20 s safe from your own buttons (stacks up)</span></li>
         <li><span class="keys"><kbd>N</kbd></span><span data-i18n="kRestart">Restart the current level</span></li>
         <li><span class="keys"><kbd>Esc</kbd></span><span data-i18n="kPause">Pause</span></li>
       </ul>
@@ -486,7 +489,7 @@ document.getElementById('winLogo').src = window.LOGO_IMG;
   }
 })();
 </script>
-<script src="game.js?v=03316a86"></script>
+<script src="game.js?v=c4975e20"></script>
 
 
 
