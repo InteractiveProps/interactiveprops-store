@@ -487,16 +487,20 @@
 window.MODEL_URL = 'assets/homero.glb?v=d96d61f1';
 window.LOGO_IMG = 'assets/logo.webp?v=f0f96a0b';
 window.COVER_IMG = 'assets/cover.webp?v=bc21041b';
-window.ICON_IMG = 'assets/icon180.png?v=bd27968b';
 window.QR_IMG = 'assets/qr.png?v=18bf1dd4';
 window.SPLASH_T0 = performance.now();
-document.getElementById('splash').style.setProperty('--cover', 'url(' + window.COVER_IMG + ')');
-document.getElementById('menuLogo').src = window.LOGO_IMG;
-document.getElementById('winLogo').src = window.LOGO_IMG;
+window.ICON_IMG = 'assets/icon180.png?v=bd27968b';
 ['icon', 'apple-touch-icon'].forEach(function (rel) {
   var l = document.createElement('link');
   l.rel = rel; l.type = 'image/png'; l.sizes = '180x180'; l.href = window.ICON_IMG;
   document.head.appendChild(l);
+});
+document.getElementById('splash').style.setProperty('--cover', 'url(' + window.COVER_IMG + ')');
+document.getElementById('menuLogo').src = window.LOGO_IMG;
+document.getElementById('winLogo').src = window.LOGO_IMG;
+document.getElementById('pauseLogo').src = window.LOGO_IMG;
+['qrMenu', 'qrPausa', 'qrWin'].forEach(function (id) {
+  document.getElementById(id).src = window.QR_IMG;
 });
 </script>
 
