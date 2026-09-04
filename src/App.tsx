@@ -1510,6 +1510,67 @@ function GamePage({products,lang,setLang,cartCount,setCartOpen,paypalLoaded,goHo
   );
 }
 
+// ─── SEO ──────────────────────────────────────────────────────────────────────
+// Una SPA sirve el MISMO html para todas las rutas. Sin esto, Google vería el
+// mismo título y la misma descripción en cada página y no sabría distinguirlas
+// (ni de qué va cada una). Al cambiar de vista reescribimos las etiquetas.
+const BASE_URL = "https://www.interactiveprop.com";
+const OG_DEFECTO = BASE_URL + "/landing/og.jpg";
+const OG_JUEGO = BASE_URL + "/landing/juego-og.jpg";
+
+function metaDeVista(view:string, tab:string){
+  switch(view){
+    case "products":
+      return tab==="games"
+        ? { t:"Donut Bridge — interactive browser game | Interactive Props",
+            d:"Donut Bridge: collect donuts, build the bridge and cross the chasm. 10 levels, plays in any browser, one-time payment of $9.99.",
+            img:OG_JUEGO }
+        : { t:"Interactive streaming props — Blaster, Pump, Silly String & LED Sign",
+            d:"Physical devices your viewers trigger live on stream through gifts, donations, subs, alerts, channel points and webhooks.",
+            img:OG_DEFECTO };
+    case "juego":
+      return { t:"Donut Bridge — buy the game | Interactive Props",
+               d:"Donut Bridge is a fast-paced donut-hopping game: collect donuts, build the bridge, cross 10 levels. Buy once for $9.99 and play forever in your browser — nothing to install.",
+               img:OG_JUEGO };
+    case "faq":
+      return { t:"FAQ — Interactive Props",
+               d:"How interactive streaming props work, setup, supported platforms, shipping, returns and warranty.", img:OG_DEFECTO };
+    case "shipping":
+      return { t:"Shipping & Delivery — Interactive Props",
+               d:"Processing and delivery times, international shipping and tracking for Interactive Props orders.", img:OG_DEFECTO };
+    case "returns":
+      return { t:"Returns & Refunds — Interactive Props",
+               d:"14-day returns on unused items in original condition, and what to do if your order arrives damaged.", img:OG_DEFECTO };
+    case "warranty":
+      return { t:"Warranty — Interactive Props",
+               d:"Limited 90-day warranty covering manufacturing defects on eligible Interactive Props devices.", img:OG_DEFECTO };
+    default:
+      return { t:"Interactive Props — Streaming props your viewers control live",
+               d:"Interactive Props builds physical streaming devices your audience triggers live through gifts, donations, subs, alerts and webhooks. Plus Donut Bridge, our browser game.",
+               img:OG_DEFECTO };
+  }
+}
+
+function fijaMeta(clave:string, valor:string, porPropiedad=false){
+  const attr = porPropiedad ? "property" : "name";
+  let el = document.head.querySelector('meta[' + attr + '="' + clave + '"]') as HTMLMetaElement | null;
+  if(!el){ el = document.createElement("meta"); el.setAttribute(attr, clave); document.head.appendChild(el); }
+  el.setAttribute("content", valor);
+}
+function fijaCanonical(url:string){
+  let el = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+  if(!el){ el = document.createElement("link"); el.rel = "canonical"; document.head.appendChild(el); }
+  el.href = url;
+}
+// Ficha estructurada: es lo que permite que Google enseñe precio y disponibilidad
+// en el resultado, en vez de solo un enlace azul.
+function fijaJsonLd(id:string, datos:any){
+  let el = document.getElementById(id) as HTMLScriptElement | null;
+  if(!datos){ if(el) el.remove(); return; }
+  if(!el){ el = document.createElement("script"); el.id = id; el.type = "application/ld+json"; document.head.appendChild(el); }
+  el.textContent = JSON.stringify(datos);
+}
+
 // ─── RUTAS ────────────────────────────────────────────────────────────────────
 // Una direccion por pantalla. Sin esto la barra del navegador se queda en "/"
 // pase lo que pase: no se puede compartir un enlace ni funciona el boton atras.
@@ -1572,6 +1633,41 @@ export default function App() {
     window.addEventListener("popstate", aplicar);
     return ()=>window.removeEventListener("popstate", aplicar);
   },[]);
+
+
+  // Reescribe las etiquetas que lee Google y las que arman la tarjeta al
+  // compartir el enlace, según la página en la que estés.
+  useEffect(()=>{
+    const m = metaDeVista(view, productsTab);
+    const url = BASE_URL + rutaDeVista(view, productsTab);
+    document.title = m.t;
+    fijaMeta("description", m.d);
+    fijaCanonical(url);
+    fijaMeta("og:title", m.t, true);
+    fijaMeta("og:description", m.d, true);
+    fijaMeta("og:url", url, true);
+    fijaMeta("og:image", m.img, true);
+    fijaMeta("twitter:title", m.t);
+    fijaMeta("twitter:description", m.d);
+    fijaMeta("twitter:image", m.img);
+    // El panel de admin nunca debe salir en Google.
+    fijaMeta("robots", (view==="login"||view==="admin") ? "noindex,nofollow" : "index,follow");
+    // Ficha del juego (solo donde toca).
+    fijaJsonLd("ld-juego", (view==="juego" || (view==="products" && productsTab==="games")) ? {
+      "@context":"https://schema.org",
+      "@type":"VideoGame",
+      "name":"Donut Bridge",
+      "url":BASE_URL+"/comprar-donut-bridge",
+      "image":OG_JUEGO,
+      "description":"Collect donuts, turn them into bridge planks and cross the chasm across 10 levels. Plays in any browser.",
+      "gamePlatform":"Web browser",
+      "operatingSystem":"Any (web browser)",
+      "applicationCategory":"GameApplication",
+      "publisher":{"@type":"Organization","name":"Interactive Props","url":BASE_URL+"/"},
+      "offers":{"@type":"Offer","price":JUEGO_PRECIO,"priceCurrency":"USD",
+                "availability":"https://schema.org/InStock","url":BASE_URL+"/comprar-donut-bridge"}
+    } : null);
+  },[view, productsTab]);
 
   // Al cambiar de vista, actualiza la barra de direcciones.
   useEffect(()=>{

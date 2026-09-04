@@ -1,0 +1,9 @@
+# interactiveprop.com
+User-agent: *
+Allow: /
+
+# El juego solo se sirve con licencia: no tiene sentido rastrearlo.
+Disallow: /juego
+Disallow: /api/
+
+Sitemap: https://www.interactiveprop.com/sitemap.xml
